@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="Free, 100% in-browser audio and studio tools built by Saint Gordon Collective — starting with Master Clash, a blind mastering A/B shootout console."
+    />
+    <title>Tools — Saint Gordon Collective</title>
+    <link rel="icon" href="assets/icons/mark.svg" type="image/svg+xml" />
+    <link
+      rel="preload"
+      href="assets/fonts/OPTIEngraversOldEnglish.woff"
+      as="font"
+      type="font/woff"
+      crossorigin
+    />
+    <link rel="stylesheet" href="css/style.css?v=20261124-tools" />
+    <script src="js/artists.js?v=20261104-122000" defer></script>
+    <script src="js/content.js?v=20261104-122000" defer></script>
+    <script src="js/catalogue.js?v=20261104-122000" defer></script>
+    <script src="js/tracks.js?v=20261104-122000" defer></script>
+    <script src="js/soundcloud-data.js?v=20261118-184933-237071" defer></script>
+    <script src="js/player.js?v=20261104-122000" defer></script>
+    <script src="js/playlist-sync.js?v=20261104-122000" defer></script>
+    <script src="js/carousel.js?v=20261104-122000" defer></script>
+    <script src="js/site.js?v=profile-sync-2" defer></script>
+  </head>
+  <body data-page="tools">
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="header">
+      <a
+        class="brand"
+        href="index.html"
+        aria-label="Saint Gordon Collective home"
+      >
+        Saint Gordon
+        <span>COLLECTIVE</span>
+      </a>
+      <button
+        class="menu-toggle"
+        aria-expanded="false"
+        aria-controls="navigation"
+      >
+        INDEX +
+      </button>
+      <nav id="navigation" aria-label="Main navigation">
+        <a href="index.html">
+          I
+          <span>Home</span>
+        </a>
+        <a href="collection.html">
+          II
+          <span>The Collection</span>
+        </a>
+        <a href="about.html">
+          III
+          <span>About</span>
+        </a>
+        <a href="contact.html">
+          IV
+          <span>Contact Us</span>
+        </a>
+        <a href="collaboration.html">V <span>Collaborate</span></a>
+        <a href="tools.html">VI <span>Tools</span></a>
+      </nav>
+    </header>
+    <main id="main" class="page tools-page">
+      <div class="page-top micro">
+        <span>VI / STUDIO TOOLS</span>
+        <span>100% IN-BROWSER · ZERO UPLOADS</span>
+      </div>
+      <h1 class="page-title">Studio Tools.</h1>
+      <p class="intro tools-intro">
+        Free, private web utilities built by Saint Gordon Collective for independent artists and engineers. Every tool runs locally inside your browser — no accounts, no paywalls, and your audio never leaves your machine.
+      </p>
+
+      <section class="tools-grid" aria-label="Available studio tools">
+        <article class="tool-box tool-box-featured">
+          <div class="tool-box-top micro">
+            <span class="section-badge">TOOL / 001</span>
+            <span>LIVE · WEB AUDIO CONSOLE</span>
+          </div>
+
+          <div class="tool-box-body">
+            <div class="tool-box-copy">
+              <h2 class="tool-box-title">Master Clash</h2>
+              <p class="tool-box-tagline">
+                Blind Mastering Shootout &amp; A/B Comparison Console
+              </p>
+              <p class="tool-box-desc">
+                Drop any batch of master renders or an entire folder into your browser and choose the strongest master strictly by ear. Master Clash runs permanently in Pure Blind Mode — sealing filenames, formats, and upload order until a winner is crowned — while silently matching perceived loudness so a louder bounce can never trick your ear.
+              </p>
+
+              <ul class="tool-spec-list micro">
+                <li>Pure Blind Mode always on</li>
+                <li>ITU-R BS.1770 LUFS loudness matching</li>
+                <li>Sample-locked 0-latency A/B switching</li>
+                <li>Stereo / Mono / Side monitoring matrix</li>
+                <li>King of the Hill, Round-Robin &amp; ABX modes</li>
+                <li>Selectable waveform loop &amp; Markdown report</li>
+              </ul>
+
+              <div class="tool-box-actions">
+                <a
+                  class="paper-button"
+                  href="https://firewallaby.github.io/master-clash/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Master Clash
+                  <span aria-hidden="true">↗</span>
+                </a>
+                <a
+                  class="text-link"
+                  href="https://github.com/Firewallaby/master-clash"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View source on GitHub ↗
+                </a>
+              </div>
+            </div>
+
+            <aside class="tool-box-console" aria-label="Master Clash workflow overview">
+              <div class="tool-console-head micro">
+                <span>SIGNAL CHAIN // PURE BLIND</span>
+                <span>LOCAL ONLY</span>
+              </div>
+              <ol class="tool-workflow-steps">
+                <li>
+                  <span class="micro">01 / DROP</span>
+                  <strong>Load multiple masters</strong>
+                  <p>Automatically filters for MASTER / MASTERED and excludes UNMASTERED bounces. Identities stay sealed immediately.</p>
+                </li>
+                <li>
+                  <span class="micro">02 / COMPARE</span>
+                  <strong>Switch cleanly on the beat</strong>
+                  <p>Pick your chorus or midpoint on the waveform, check Mono &amp; Side, jot blind notes, and vote with keyboard shortcuts.</p>
+                </li>
+                <li>
+                  <span class="micro">03 / VERDICT</span>
+                  <strong>Break the seal &amp; export</strong>
+                  <p>Reveals the champion filename, integrated LUFS, peak dBFS, crest factor, full rankings, and an exportable Markdown report.</p>
+                </li>
+              </ol>
+            </aside>
+          </div>
+        </article>
+
+        <article class="tool-box tool-box-upcoming">
+          <div class="tool-box-top micro">
+            <span class="badge">MORE IN DEVELOPMENT</span>
+            <span>SAINT GORDON TOOLBELT</span>
+          </div>
+          <h2 class="tool-box-title-sm">More independent web tools coming soon.</h2>
+          <p class="tool-box-desc">
+            We are expanding this studio desk with more browser-native tools for metadata tagging, cover art prep, release loudness checking, and vocal stem verification. Have a tool idea you want built?
+          </p>
+          <a class="text-link" href="contact.html">Suggest a tool ↗</a>
+        </article>
+      </section>
+    </main>
+    <footer>
+      <div class="footer-brand">Saint Gordon Collective</div>
+      <div class="footer-nav">
+        <a href="collection.html">The Collection</a>
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact Us</a>
+        <a href="collaboration.html">Collaborate</a>
+        <a href="tools.html">Tools</a>
+        <span data-profile></span>
+      </div>
+      <div class="footer-meta">
+        <span>
+          ©
+          <span data-year></span>
+          Saint Gordon Collective
+        </span>
+        <span
+          data-copy="shared.footerTagline"
+          data-copy-base="Independent sound. Imperfect by design."
+        >
+          Independent sound. Imperfect by design.
+        </span>
+        <a href="credits.html">Site credits</a>
+      </div>
+    </footer>
+    <noscript>
+      <p class="notice">
+        Enable JavaScript for full interactive features. All Saint Gordon tools links remain accessible above.
+      </p>
+    </noscript>
+  </body>
+</html>

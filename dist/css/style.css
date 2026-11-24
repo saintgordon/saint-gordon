@@ -2594,3 +2594,193 @@ h3,
     grid-template-columns: 40px minmax(0, 1fr);
   }
 }
+
+/* =========================================================
+   Tools Section & Tool Boxes (Saint Gordon Studio Toolbelt)
+   ========================================================= */
+.tools-section {
+  border-top: 1px solid #101010;
+  background: #f2f2f2;
+}
+.tools-intro {
+  max-width: 58ch;
+}
+.tools-grid {
+  display: grid;
+  gap: 44px;
+  margin-top: 40px;
+}
+.tool-box {
+  position: relative;
+  border: 1px solid #101010;
+  background: #ffffff;
+  padding: 36px 38px;
+  box-shadow: 7px 7px 0 #101010;
+}
+.tool-box-upcoming {
+  background: #fafafa;
+  border-style: dashed;
+  box-shadow: 5px 5px 0 #b8b8b8;
+}
+.tool-box-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 18px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid #101010;
+}
+.tool-box-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.95fr);
+  gap: 44px;
+  align-items: start;
+}
+.tool-box-home-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) auto;
+  gap: 40px;
+  align-items: center;
+}
+.tool-box-copy {
+  min-width: 0;
+}
+.tool-box-title {
+  font-family: "Engravers Old English", Relic, Georgia, serif;
+  font-size: clamp(2.4rem, 4.5vw, 3.8rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+}
+.tool-box-title-sm {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0 0 14px;
+}
+.tool-box-tagline {
+  font-family: Georgia, serif;
+  font-style: italic;
+  font-size: clamp(1.1rem, 1.7vw, 1.35rem);
+  font-weight: 700;
+  color: #303030;
+  margin: 0 0 18px;
+}
+.tool-box-desc {
+  color: #303030;
+  font-weight: 600;
+  line-height: 1.75;
+  max-width: 60ch;
+  margin: 0 0 24px;
+}
+.tool-spec-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.tool-spec-list li {
+  border: 1px solid #101010;
+  background: #f2f2f2;
+  padding: 6px 11px;
+  font-size: 11px;
+}
+.tool-box-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+}
+.tool-box-actions .text-link {
+  margin-top: 0;
+}
+.tool-box-home-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 16px;
+}
+.tool-box-home-cta .text-link {
+  margin-top: 4px;
+}
+.tool-box-console {
+  background: radial-gradient(120% 140% at 0% 0%, #262626 0%, #141414 55%, #0b0b0b 100%);
+  color: #f2f2f2;
+  border: 1px solid #000000;
+  padding: 26px 28px;
+  box-shadow: 6px 6px 0 #b8b8b8;
+}
+.tool-console-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  border-bottom: 1px dashed #3a3a3a;
+  color: #bdbdbd;
+}
+.tool-workflow-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.tool-workflow-steps li {
+  padding-bottom: 18px;
+  border-bottom: 1px dashed #2e2e2e;
+}
+.tool-workflow-steps li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.tool-workflow-steps .micro {
+  display: block;
+  color: #9a9a9a;
+  margin-bottom: 6px;
+}
+.tool-workflow-steps strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 6px;
+}
+.tool-workflow-steps p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: #cccccc;
+}
+@media (max-width: 1060px) {
+  .header nav {
+    gap: 18px;
+  }
+}
+@media (max-width: 960px) {
+  .tool-box-body,
+  .tool-box-home-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .tool-box-home-cta {
+    align-items: flex-start;
+  }
+}
+@media (max-width: 760px) {
+  .tool-box {
+    padding: 24px 20px;
+    box-shadow: 5px 5px 0 #101010;
+  }
+  .tool-box-console {
+    padding: 20px 18px;
+  }
+}
