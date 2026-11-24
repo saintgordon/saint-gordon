@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta
       name="description"
-      content="Free, 100% in-browser audio and studio tools built by Saint Gordon Collective — starting with Master Clash, a blind mastering A/B shootout console."
+      content="Free, 100% in-browser audio and studio tools built by Saint Gordon Collective — Master Clash, Pre-Flight, Xerox Press, Tag & Seal, BPM & Key Finder, Reverb & Delay Counter, and Stem Check."
     />
     <title>Tools — Saint Gordon Collective</title>
     <link rel="icon" href="assets/icons/mark.svg" type="image/svg+xml" />
@@ -16,7 +16,7 @@
       type="font/woff"
       crossorigin
     />
-    <link rel="stylesheet" href="css/style.css?v=20261124-tools" />
+    <link rel="stylesheet" href="css/style.css?v=20261125-tools" />
     <script src="js/artists.js?v=20261104-122000" defer></script>
     <script src="js/content.js?v=20261104-122000" defer></script>
     <script src="js/catalogue.js?v=20261104-122000" defer></script>
@@ -69,15 +69,26 @@
     <main id="main" class="page tools-page">
       <div class="page-top micro">
         <span>VI / STUDIO TOOLS</span>
-        <span>100% IN-BROWSER · ZERO UPLOADS</span>
+        <span>7 LIVE TOOLS · 100% IN-BROWSER · ZERO UPLOADS</span>
       </div>
       <h1 class="page-title">Studio Tools.</h1>
       <p class="intro tools-intro">
-        Free, private web utilities built by Saint Gordon Collective for independent artists and engineers. Every tool runs locally inside your browser — no accounts, no paywalls, and your audio never leaves your machine.
+        Free, private web utilities built by Saint Gordon Collective for independent artists and engineers. Every tool runs locally inside your browser — no accounts, no paywalls, and your audio and artwork never leave your machine.
       </p>
 
+      <nav class="tools-jump-nav micro" aria-label="Jump to a studio tool">
+        <a class="tools-jump-pill" href="#tool-master-clash"><span>001</span> Master Clash</a>
+        <a class="tools-jump-pill" href="#tool-pre-flight"><span>002</span> Pre-Flight</a>
+        <a class="tools-jump-pill" href="#tool-xerox-press"><span>003</span> Xerox Press</a>
+        <a class="tools-jump-pill" href="#tool-tag-and-seal"><span>004</span> Tag &amp; Seal</a>
+        <a class="tools-jump-pill" href="#tool-bpm-key-finder"><span>005</span> BPM &amp; Key Finder</a>
+        <a class="tools-jump-pill" href="#tool-reverb-delay-counter"><span>006</span> Reverb &amp; Delay Counter</a>
+        <a class="tools-jump-pill" href="#tool-stem-check"><span>007</span> Stem Check</a>
+      </nav>
+
       <section class="tools-grid" aria-label="Available studio tools">
-        <article class="tool-box tool-box-featured">
+        <!-- TOOL / 001: MASTER CLASH -->
+        <article id="tool-master-clash" class="tool-box tool-box-featured">
           <div class="tool-box-top micro">
             <span class="section-badge">TOOL / 001</span>
             <span>LIVE · WEB AUDIO CONSOLE</span>
@@ -149,14 +160,452 @@
           </div>
         </article>
 
+        <!-- TOOL / 002: PRE-FLIGHT -->
+        <article id="tool-pre-flight" class="tool-box tool-box-featured">
+          <div class="tool-box-top micro">
+            <span class="section-badge">TOOL / 002</span>
+            <span>LIVE · RELEASE CHECKER</span>
+          </div>
+
+          <div class="tool-box-body">
+            <div class="tool-box-copy">
+              <h2 class="tool-box-title">Pre-Flight</h2>
+              <p class="tool-box-tagline">
+                Plain-English Release Readiness &amp; Streaming Loudness Checker
+              </p>
+              <p class="tool-box-desc">
+                Drop your finished master before uploading to Spotify, Apple Music, YouTube, or TikTok. Pre-Flight checks loudness, 4× oversampled true peak, clipping, mono fold-down, and bass phase — then gives you numbered, plain-English DAW fix steps and a live A/B player so you can hear exact platform turn-down before releasing.
+              </p>
+
+              <ul class="tool-spec-list micro">
+                <li>Plain-English DAW fix steps</li>
+                <li>LUFS, 4× True Peak &amp; LRA metering</li>
+                <li>Spotify, Apple, YouTube &amp; TikTok A/B</li>
+                <li>Clipping &amp; inter-sample peak finder</li>
+                <li>Phone / Mono &amp; &lt;120 Hz bass phase check</li>
+                <li>Exportable Markdown audit report</li>
+              </ul>
+
+              <div class="tool-box-actions">
+                <a
+                  class="paper-button"
+                  href="https://saintgordon.github.io/pre-flight/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Pre-Flight
+                  <span aria-hidden="true">↗</span>
+                </a>
+                <a
+                  class="text-link"
+                  href="https://github.com/saintgordon/pre-flight"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View source on GitHub ↗
+                </a>
+              </div>
+            </div>
+
+            <aside class="tool-box-console" aria-label="Pre-Flight workflow overview">
+              <div class="tool-console-head micro">
+                <span>SIGNAL CHAIN // RELEASE AUDIT</span>
+                <span>LOCAL ONLY</span>
+              </div>
+              <ol class="tool-workflow-steps">
+                <li>
+                  <span class="micro">01 / DROP</span>
+                  <strong>Inspect your master in seconds</strong>
+                  <p>Analyzes ITU-R BS.1770-4 loudness, 4× True Peak, clipping bursts, mono translation, and low-end phase right in the browser.</p>
+                </li>
+                <li>
+                  <span class="micro">02 / FIX</span>
+                  <strong>Follow numbered plain-English steps</strong>
+                  <p>Separates must-fix blockers from optional tips, telling you exactly what to adjust in your DAW with 1-click jump-to-problem auditioning.</p>
+                </li>
+                <li>
+                  <span class="micro">03 / AUDITION</span>
+                  <strong>Hear real streaming turn-down</strong>
+                  <p>Switch clicklessly between your original file and normalized Spotify, Apple Music, YouTube, or TikTok playback levels.</p>
+                </li>
+              </ol>
+            </aside>
+          </div>
+        </article>
+
+        <!-- TOOL / 003: XEROX PRESS -->
+        <article id="tool-xerox-press" class="tool-box tool-box-featured">
+          <div class="tool-box-top micro">
+            <span class="section-badge">TOOL / 003</span>
+            <span>LIVE · COVER &amp; PHOTOCOPY FILTER</span>
+          </div>
+
+          <div class="tool-box-body">
+            <div class="tool-box-copy">
+              <h2 class="tool-box-title">Xerox Press</h2>
+              <p class="tool-box-tagline">
+                Saint Gordon Photocopy Toner Filter &amp; 3000×3000 Cover Exporter
+              </p>
+              <p class="tool-box-desc">
+                Apply the signature Saint Gordon 1-bit Xerox photocopy toner aesthetic to any photo directly in your browser. Export at the exact pixel dimensions you uploaded with zero cropping, or frame a distribution-ready 3000×3000 square release cover with interactive pan, zoom, and optional Old English typography.
+              </p>
+
+              <ul class="tool-spec-list micro">
+                <li>Match Original Dimensions or 3000×3000</li>
+                <li>Midtone-gated 1-bit Xerox toner grain</li>
+                <li>5 presets + live split-wipe compare</li>
+                <li>Pure B&amp;W, Relic Paper &amp; Inverted palettes</li>
+                <li>Optional Old English cover text overlay</li>
+                <li>Lossless PNG &amp; high-quality JPEG export</li>
+              </ul>
+
+              <div class="tool-box-actions">
+                <a
+                  class="paper-button"
+                  href="https://saintgordon.github.io/xerox-press/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Xerox Press
+                  <span aria-hidden="true">↗</span>
+                </a>
+                <a
+                  class="text-link"
+                  href="https://github.com/saintgordon/xerox-press"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View source on GitHub ↗
+                </a>
+              </div>
+            </div>
+
+            <aside class="tool-box-console" aria-label="Xerox Press workflow overview">
+              <div class="tool-console-head micro">
+                <span>DARKROOM // 1-BIT PHOTOCOPY</span>
+                <span>LOCAL ONLY</span>
+              </div>
+              <ol class="tool-workflow-steps">
+                <li>
+                  <span class="micro">01 / LOAD</span>
+                  <strong>Drop or paste any photograph</strong>
+                  <p>Choose Match Original Dimensions for zero-crop output, or 3000×3000 px square with anchor presets, drag pan, and zoom.</p>
+                </li>
+                <li>
+                  <span class="micro">02 / DIAL</span>
+                  <strong>Tune toner threshold &amp; grain</strong>
+                  <p>Pick Standard, Lighter, Darker, Heavy Toner, or High-Key Zine, inspect with Split Wipe, and re-roll grain on demand.</p>
+                </li>
+                <li>
+                  <span class="micro">03 / PRESS</span>
+                  <strong>Export full-resolution PNG</strong>
+                  <p>Optionally stamp Old English title &amp; artist lines in matched outline styles, then export lossless at full target resolution.</p>
+                </li>
+              </ol>
+            </aside>
+          </div>
+        </article>
+
+        <!-- TOOL / 004: TAG & SEAL -->
+        <article id="tool-tag-and-seal" class="tool-box tool-box-featured">
+          <div class="tool-box-top micro">
+            <span class="section-badge">TOOL / 004</span>
+            <span>LIVE · METADATA &amp; ARTWORK STUDIO</span>
+          </div>
+
+          <div class="tool-box-body">
+            <div class="tool-box-copy">
+              <h2 class="tool-box-title">Tag &amp; Seal</h2>
+              <p class="tool-box-tagline">
+                Lossless Audio Metadata Editor &amp; Cover Art Embedder
+              </p>
+              <p class="tool-box-desc">
+                Embed cover art and edit key track metadata directly inside WAV, MP3, and FLAC files without re-encoding a single audio sample. Tag &amp; Seal writes universally compatible RIFF INFO + ID3v2.3 and FLAC Picture blocks so your artwork, title, artist, BPM, key, and ISRC show up cleanly across Finder, Apple Music, DJ decks, and phones.
+              </p>
+
+              <ul class="tool-spec-list micro">
+                <li>Lossless WAV, MP3 &amp; FLAC container editing</li>
+                <li>Zero audio re-encoding (bit-for-bit verified)</li>
+                <li>Cover art studio + auto JPEG/PNG convert</li>
+                <li>1-click Xerox cover art filter option</li>
+                <li>Title, Artist, BPM, Key/Camelot, ISRC &amp; lyrics</li>
+                <li>Preserves BEXT, cue &amp; studio chunks</li>
+              </ul>
+
+              <div class="tool-box-actions">
+                <a
+                  class="paper-button"
+                  href="https://saintgordon.github.io/tag-and-seal/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Tag &amp; Seal
+                  <span aria-hidden="true">↗</span>
+                </a>
+                <a
+                  class="text-link"
+                  href="https://github.com/saintgordon/tag-and-seal"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View source on GitHub ↗
+                </a>
+              </div>
+            </div>
+
+            <aside class="tool-box-console" aria-label="Tag and Seal workflow overview">
+              <div class="tool-console-head micro">
+                <span>CONTAINER // BIT-EXACT SEAL</span>
+                <span>LOCAL ONLY</span>
+              </div>
+              <ol class="tool-workflow-steps">
+                <li>
+                  <span class="micro">01 / LOAD</span>
+                  <strong>Drop a WAV, MP3, or FLAC</strong>
+                  <p>Reads existing tags, embedded cover art, technical specs, and studio chunks directly from the raw binary container.</p>
+                </li>
+                <li>
+                  <span class="micro">02 / EDIT</span>
+                  <strong>Attach cover art &amp; key info</strong>
+                  <p>Upload square artwork (auto-resized to 1400/3000 px if needed) and update title, artist, album, BPM, musical key, ISRC, and lyrics.</p>
+                </li>
+                <li>
+                  <span class="micro">03 / SEAL</span>
+                  <strong>Download with checksum proof</strong>
+                  <p>Rebuilds metadata chunks cleanly and verifies your audio frames remained 100% bit-for-bit untouched before download.</p>
+                </li>
+              </ol>
+            </aside>
+          </div>
+        </article>
+
+        <!-- TOOL / 005: BPM & KEY FINDER -->
+        <article id="tool-bpm-key-finder" class="tool-box tool-box-featured">
+          <div class="tool-box-top micro">
+            <span class="section-badge">TOOL / 005</span>
+            <span>LIVE · TEMPO &amp; HARMONIC ANALYZER</span>
+          </div>
+
+          <div class="tool-box-body">
+            <div class="tool-box-copy">
+              <h2 class="tool-box-title">BPM &amp; Key Finder</h2>
+              <p class="tool-box-tagline">
+                Fast Tempo, Musical Key &amp; Camelot Wheel Analyzer
+              </p>
+              <p class="tool-box-desc">
+                Drop a beat or a full beat pack for instant tempo and musical key detection powered by 4-band SuperFlux onset tracking and an 8192-point HPCP chromagram with dedicated 40–210 Hz bass-root disambiguation. Verify results by ear in one click with a beat-locked click track and triad key chord, or send the BPM straight to Reverb &amp; Delay Counter.
+              </p>
+
+              <ul class="tool-spec-list micro">
+                <li>4-band SuperFlux BPM + integer snap</li>
+                <li>8192-pt HPCP + bass-root key engine</li>
+                <li>Beat-locked Click Track &amp; Hear Key chord</li>
+                <li>Instant ÷2 / ×2 &amp; # / ♭ toggles</li>
+                <li>Collapsible Camelot Wheel &amp; Tap Tempo</li>
+                <li>Batch folder analysis &amp; CSV export</li>
+              </ul>
+
+              <div class="tool-box-actions">
+                <a
+                  class="paper-button"
+                  href="https://saintgordon.github.io/bpm-key-finder/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open BPM &amp; Key Finder
+                  <span aria-hidden="true">↗</span>
+                </a>
+                <a
+                  class="text-link"
+                  href="https://github.com/saintgordon/bpm-key-finder"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View source on GitHub ↗
+                </a>
+              </div>
+            </div>
+
+            <aside class="tool-box-console" aria-label="BPM and Key Finder workflow overview">
+              <div class="tool-console-head micro">
+                <span>SIGNAL CHAIN // SUPERFLUX + HPCP</span>
+                <span>LOCAL ONLY</span>
+              </div>
+              <ol class="tool-workflow-steps">
+                <li>
+                  <span class="micro">01 / DROP</span>
+                  <strong>Load one track or a beat pack</strong>
+                  <p>Separates drum transients from vocal vibrato and strips percussion noise before extracting tonal pitch peaks and bass roots.</p>
+                </li>
+                <li>
+                  <span class="micro">02 / VERIFY</span>
+                  <strong>Confirm tempo &amp; key by ear</strong>
+                  <p>Toggle the beat-locked Click Track or press Hear Key to audition the detected triad right over your song.</p>
+                </li>
+                <li>
+                  <span class="micro">03 / COPY</span>
+                  <strong>Grab tags or open delay times</strong>
+                  <p>Copy BPM &amp; Camelot code in one click, inspect compatible Camelot transitions, or jump directly into Reverb &amp; Delay Counter.</p>
+                </li>
+              </ol>
+            </aside>
+          </div>
+        </article>
+
+        <!-- TOOL / 006: REVERB & DELAY COUNTER -->
+        <article id="tool-reverb-delay-counter" class="tool-box tool-box-featured">
+          <div class="tool-box-top micro">
+            <span class="section-badge">TOOL / 006</span>
+            <span>LIVE · TEMPO TIMING CALCULATOR</span>
+          </div>
+
+          <div class="tool-box-body">
+            <div class="tool-box-copy">
+              <h2 class="tool-box-title">Reverb &amp; Delay Counter</h2>
+              <p class="tool-box-tagline">
+                Instant Tempo-Synced Reverb Pre-Delay, RT60 Decay &amp; Delay Calculator
+              </p>
+              <p class="tool-box-desc">
+                Type a BPM, tap live, or drop a song to immediately see exact Pre-Delay and Decay times for Hall, Big Room, Small Room, Tight Ambience, Vocal Plate, Cathedral, and Slapback — formatted in Plugin-Ready units (ms + seconds) for Valhalla, ChromaVerb, and Pro-R, with 1-click Copy and live Web Audio auditioning on every row.
+              </p>
+
+              <ul class="tool-spec-list micro">
+                <li>Instant Reverb table above the fold</li>
+                <li>Plugin-Ready (ms / s) unit toggle</li>
+                <li>Live Web Audio reverb &amp; delay audition</li>
+                <li>Straight, Dotted &amp; Triplet delay matrix</li>
+                <li>Tap Tempo, Metronome &amp; audio auto-BPM</li>
+                <li>Sidechain release, swing &amp; .md cheat sheet</li>
+              </ul>
+
+              <div class="tool-box-actions">
+                <a
+                  class="paper-button"
+                  href="https://saintgordon.github.io/reverb-delay-counter/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Reverb &amp; Delay Counter
+                  <span aria-hidden="true">↗</span>
+                </a>
+                <a
+                  class="text-link"
+                  href="https://github.com/saintgordon/reverb-delay-counter"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View source on GitHub ↗
+                </a>
+              </div>
+            </div>
+
+            <aside class="tool-box-console" aria-label="Reverb and Delay Counter workflow overview">
+              <div class="tool-console-head micro">
+                <span>TEMPO DECK // PRE-DELAY + RT60</span>
+                <span>LOCAL ONLY</span>
+              </div>
+              <ol class="tool-workflow-steps">
+                <li>
+                  <span class="micro">01 / DIAL</span>
+                  <strong>Enter BPM, tap, or drop a beat</strong>
+                  <p>Updates every reverb size, delay note subdivision, LFO Hz rate, and sidechain release live with zero extra clicks.</p>
+                </li>
+                <li>
+                  <span class="micro">02 / HEAR</span>
+                  <strong>Audition before touching your DAW</strong>
+                  <p>Click Hear on any reverb size or delay cell to preview that exact millisecond pre-delay, RT60 tail, or echo repeat live.</p>
+                </li>
+                <li>
+                  <span class="micro">03 / PASTE</span>
+                  <strong>Copy plugin-ready numbers</strong>
+                  <p>Click any value to copy straight into your reverb or delay plugin, or export a full Markdown session timing sheet.</p>
+                </li>
+              </ol>
+            </aside>
+          </div>
+        </article>
+
+        <!-- TOOL / 007: STEM CHECK -->
+        <article id="tool-stem-check" class="tool-box tool-box-featured">
+          <div class="tool-box-top micro">
+            <span class="section-badge">TOOL / 007</span>
+            <span>LIVE · PRE-MIX STEM VALIDATOR</span>
+          </div>
+
+          <div class="tool-box-body">
+            <div class="tool-box-copy">
+              <h2 class="tool-box-title">Stem Check</h2>
+              <p class="tool-box-tagline">
+                Pre-Mix Stem Validator — Paired with Saint Gordon Collaborate
+              </p>
+              <p class="tool-box-desc">
+                Drop your beat and vocal stems into your browser before sending them for mixing. Stem Check inspects raw file headers to catch 44.1 kHz vs. 48 kHz mismatches, checks that every stem starts cleanly at 0:00 with matching length, flags digital clipping, and runs a Mid/Side check to catch baked-in stereo reverb or effects on dry mono vocals.
+              </p>
+
+              <ul class="tool-spec-list micro">
+                <li>0:00 start &amp; timeline length alignment</li>
+                <li>True native 44.1k vs. 48k header check</li>
+                <li>Digital clipping (0 dBFS) burst scanner</li>
+                <li>Mid/Side baked-in stereo FX detector</li>
+                <li>Stacked multi-track sync playback + Solo Side</li>
+                <li>Clear Pass / Fix checklist &amp; .md report</li>
+              </ul>
+
+              <div class="tool-box-actions">
+                <a
+                  class="paper-button"
+                  href="https://saintgordon.github.io/stem-check/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open Stem Check
+                  <span aria-hidden="true">↗</span>
+                </a>
+                <a
+                  class="text-link"
+                  href="https://github.com/saintgordon/stem-check"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View source on GitHub ↗
+                </a>
+              </div>
+            </div>
+
+            <aside class="tool-box-console" aria-label="Stem Check workflow overview">
+              <div class="tool-console-head micro">
+                <span>TRANSMISSION // PRE-MIX AUDIT</span>
+                <span>LOCAL ONLY</span>
+              </div>
+              <ol class="tool-workflow-steps">
+                <li>
+                  <span class="micro">01 / DROP</span>
+                  <strong>Load your beat &amp; vocal stems</strong>
+                  <p>Reads raw WAV, FLAC, AIFF, and MP3 headers before browser resampling so 44.1 kHz vs. 48 kHz mismatches never slip through.</p>
+                </li>
+                <li>
+                  <span class="micro">02 / CHECK</span>
+                  <strong>Spot sync, clip &amp; wet-vocal traps</strong>
+                  <p>Play all stems stacked from 0:00 to verify beat sync, or click Solo + Side to hear any stereo reverb you forgot to bypass.</p>
+                </li>
+                <li>
+                  <span class="micro">03 / SEND</span>
+                  <strong>Fix blockers &amp; share clean stems</strong>
+                  <p>Follow the plain-English checklist until every track clears, then send your zipped stems through the Collaborate page.</p>
+                </li>
+              </ol>
+            </aside>
+          </div>
+        </article>
+
         <article class="tool-box tool-box-upcoming">
           <div class="tool-box-top micro">
-            <span class="badge">MORE IN DEVELOPMENT</span>
-            <span>SAINT GORDON TOOLBELT</span>
+            <span class="badge">SAINT GORDON TOOLBELT</span>
+            <span>OPEN SOURCE · ZERO ACCOUNTS</span>
           </div>
-          <h2 class="tool-box-title-sm">More independent web tools coming soon.</h2>
+          <h2 class="tool-box-title-sm">Have another studio tool idea?</h2>
           <p class="tool-box-desc">
-            We are expanding this studio desk with more browser-native tools for metadata tagging, cover art prep, release loudness checking, and vocal stem verification. Have a tool idea you want built?
+            Every utility in the Saint Gordon Toolbelt is free, private, and built to solve real workflow bottlenecks for independent artists. Reach out if there is another browser tool you want us to build next.
           </p>
           <a class="text-link" href="contact.html">Suggest a tool ↗</a>
         </article>
