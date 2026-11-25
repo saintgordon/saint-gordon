@@ -12,5 +12,12 @@
       <pubDate>Wed, 25 Nov 2026 00:00:00 +0000</pubDate>
       <description>A quiet corner for studio notes, vocal mix breakdowns, release diaries, and ideas behind the Saint Gordon Collective sound.</description>
     </item>
+    <item>
+      <title>Tesst</title>
+      <link>https://saintgordon.vercel.app/writing?slug=tesst</link>
+      <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=tesst</guid>
+      <pubDate>Wed, 25 Nov 2026 00:00:00 +0000</pubDate>
+      <description>test</description>
+    </item>
   </channel>
 </rss>
