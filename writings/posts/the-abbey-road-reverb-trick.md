@@ -40,7 +40,7 @@ It works just as well on **delays** too. Unfiltered quarter note throws and slap
 You can wire this up in under a minute on any reverb or delay return bus:
 
 1. **Use a Dedicated Return Bus:** Keep your main channel dry and route a send to an aux track with your chamber, plate, or delay plugin set to `100% Wet`.
-2. **Place an EQ *After* the Delay and Reverb:** Insert a clean EQ right after your delay or reverb plugin on the return chain so the entire wet tail, feedback repeats, and any saturation harmonics get filtered cleanly before hitting the mix.
+2. **Place an EQ After the Delay and Reverb:** Insert a clean EQ right after your delay or reverb plugin on the return chain so the entire wet tail, feedback repeats, and any saturation harmonics get filtered cleanly before hitting the mix.
 3. **High Pass at `600 Hz`:** Engage a `12 dB/oct` high pass filter around `600 Hz` to strip out low mid bloom.
 4. **Low Pass at `10 kHz`:** Roll off the top with a `12 dB/oct` low pass filter at `10 kHz`, or pull it down toward `6 to 8 kHz` for darker vintage repeats.
 5. **Lock Your Timing & Blend:** Dial in `20 to 40 ms` of reverb pre delay or tempo synced delay times (use the [Reverb & Delay Counter](https://saintgordon.vercel.app/tools#tool-reverb-delay-counter) to lock both to your track’s BPM), then bring up the return fader until you *feel* the space before you hear it.
