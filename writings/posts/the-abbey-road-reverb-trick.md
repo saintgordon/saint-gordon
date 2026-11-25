@@ -2,7 +2,7 @@
 title: "The Abbey Road Reverb Trick"
 slug: "the-abbey-road-reverb-trick"
 date: "2026-11-25"
-updatedAt: "2026-11-25T04:12:42Z"
+updatedAt: "2026-11-25T04:15:30Z"
 status: "published"
 pinned: false
 tags: ["Mixing", "Studio", "Notes"]
@@ -20,7 +20,7 @@ During The Beatles’ *Revolver* and *Sgt. Pepper* sessions, balance engineer **
 
 ![1960s British valve console presence filters and patchbay routing](writings/media/20261125-034658-abbey-road-console.jpg)
 
-Once low end energy entered that tiled room, it boomed uncontrollably. To tame it, Abbey Road routed sends through their custom **S.T.E.E.D.** system (*Send, Tape, Echo, Echo, Delay*): a tape machine providing slap pre delay and feedback echoes, paired with **RS106** high and low pass filters and **RS127** presence boxes on the REDD desks to carve the signal *before* it ever hit the speaker.
+Once low end energy entered that tiled room, it boomed uncontrollably. To tame it, Abbey Road paired their echo chamber and custom **S.T.E.E.D.** (*Send, Tape, Echo, Echo, Delay*) tape delay returns with **RS106** high and low pass filters and **RS127** presence boxes on the REDD desks, sculpting the wet return so only the sweet midrange made it into the mix.
 
 ## Why We Implement It (Reverbs & Delays)
 
@@ -40,7 +40,7 @@ It works just as well on **delays** too. Unfiltered quarter note throws and slap
 You can wire this up in under a minute on any reverb or delay return bus:
 
 1. **Use a Dedicated Return Bus:** Keep your main channel dry and route a send to an aux track with your chamber, plate, or delay plugin set to `100% Wet`.
-2. **Place an EQ *Before* the Plugin:** Insert a clean EQ first on the aux chain so unwanted frequencies never excite the reverb tail or delay feedback loop.
+2. **Place an EQ *After* the Delay and Reverb:** Insert a clean EQ right after your delay or reverb plugin on the return chain so the entire wet tail, feedback repeats, and any saturation harmonics get filtered cleanly before hitting the mix.
 3. **High Pass at `600 Hz`:** Engage a `12 dB/oct` high pass filter around `600 Hz` to strip out low mid bloom.
 4. **Low Pass at `10 kHz`:** Roll off the top with a `12 dB/oct` low pass filter at `10 kHz`, or pull it down toward `6 to 8 kHz` for darker vintage repeats.
 5. **Lock Your Timing & Blend:** Dial in `20 to 40 ms` of reverb pre delay or tempo synced delay times (use the [Reverb & Delay Counter](https://saintgordon.vercel.app/tools#tool-reverb-delay-counter) to lock both to your track’s BPM), then bring up the return fader until you *feel* the space before you hear it.

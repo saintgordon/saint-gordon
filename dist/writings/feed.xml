@@ -6,11 +6,11 @@
     <description>Studio notes, mix breakdowns, release diaries, and essays from Saint Gordon Collective.</description>
     <language>en</language>
     <item>
-      <title>Welcome to Saint Gordon Writings</title>
-      <link>https://saintgordon.vercel.app/writing?slug=welcome-to-writings</link>
-      <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=welcome-to-writings</guid>
+      <title>The Abbey Road Reverb Trick</title>
+      <link>https://saintgordon.vercel.app/writing?slug=the-abbey-road-reverb-trick</link>
+      <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=the-abbey-road-reverb-trick</guid>
       <pubDate>Wed, 25 Nov 2026 00:00:00 +0000</pubDate>
-      <description>A quiet corner for studio notes, vocal mix breakdowns, release diaries, and ideas behind the Saint Gordon Collective sound.</description>
+      <description>How a 1960s EMI echo chamber workaround, cutting lows at 600 Hz and highs at 10 kHz, keeps modern reverbs and delays deep, lush, and free of mud.</description>
     </item>
   </channel>
 </rss>

@@ -1,19 +1,20 @@
 [
   {
-    "slug": "welcome-to-writings",
-    "title": "Welcome to Saint Gordon Writings",
+    "slug": "the-abbey-road-reverb-trick",
+    "title": "The Abbey Road Reverb Trick",
     "date": "2026-11-25",
-    "updatedAt": "2026-11-25T00:00:00Z",
+    "updatedAt": "2026-11-25T04:15:30Z",
     "status": "published",
-    "pinned": true,
+    "pinned": false,
     "tags": [
-      "Notes",
-      "Studio"
+      "Mixing",
+      "Studio",
+      "Notes"
     ],
-    "summary": "A quiet corner for studio notes, vocal mix breakdowns, release diaries, and ideas behind the Saint Gordon Collective sound.",
+    "summary": "How a 1960s EMI echo chamber workaround, cutting lows at 600 Hz and highs at 10 kHz, keeps modern reverbs and delays deep, lush, and free of mud.",
     "coverImage": "",
-    "readingTimeMin": 1,
-    "wordCount": 106,
-    "searchText": "This is Writings the Saint Gordon Collective notebook. Everything here is kept stripped down on purpose: raw notes from late night sessions, vocal mixing chains, behind the scenes stories behind new releases, and updates whenever we build new browser tools for independent artists. Keep the rough edges. Keep music about the art. What you'll find here Release Notes the stories, lyrics, and demos behind each drop in The Collection. Vocal & Mix Breakdowns how we treat dry stems, set tempo synced reverb pre delay, and check masters before release. Tool Dispatches updates to the free in browser Saint Gordon Studio Tools. This starter post can be edited or deleted anytime from the private /admin portal."
+    "readingTimeMin": 3,
+    "wordCount": 604,
+    "searchText": "Drenching a vocal or snare in reverb or delay is the fastest way to give a track dimension, and the fastest way to drown a mix in mud. In the 1960s, engineers at EMI’s Abbey Road Studios solved that problem with a simple filtering move that still sits on almost every spatial return bus we build today. Strip the lows. Shave the fizz. Let the midrange carry the space. Where It Comes From During The Beatles’ Revolver and Sgt. Pepper sessions, balance engineer Geoff Emerick and technical engineer Gwynne Stock didn’t have algorithmic plugins with damping knobs. Abbey Road’s Studio Two echo chamber was a real basement room lined with hard white tiles and stacked ceramic drainpipes, with a loudspeaker at one end and a tube condenser mic at the other. 1960s British valve console presence filters and patchbay routing Once low end energy entered that tiled room, it boomed uncontrollably. To tame it, Abbey Road paired their echo chamber and custom S.T.E.E.D. ( Send, Tape, Echo, Echo, Delay ) tape delay returns with RS106 high and low pass filters and RS127 presence boxes on the REDD desks, sculpting the wet return so only the sweet midrange made it into the mix. Why We Implement It (Reverbs & Delays) Sending a full range track straight into a reverb or delay creates two mix problems: Low end mud (< 600 Hz): Kick bleed, bass fundamentals, and vocal chest warmth pile up in the decay and repeats, eating headroom and clouding the low end. Top end fizz ( 10 kHz): Vocal sibilance, every sharp \"s\" and \"t\" , plus cymbal harshness splatter across the tail or echo taps as brittle metallic hiss. Human ears judge spatial depth primarily in the midrange. Bandpassing between 600 Hz and 10 kHz lets the dry vocal keep all its sub weight and intimate top end air right up against the speakers, whil"
   }
 ]
