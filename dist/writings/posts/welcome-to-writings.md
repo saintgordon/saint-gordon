@@ -1,0 +1,27 @@
+---
+title: "Welcome to Saint Gordon Writings"
+slug: "welcome-to-writings"
+date: "2026-11-25"
+updatedAt: "2026-11-25T00:00:00Z"
+status: "published"
+pinned: true
+tags: ["Notes", "Studio"]
+summary: "A quiet corner for studio notes, vocal mix breakdowns, release diaries, and ideas behind the Saint Gordon Collective sound."
+coverImage: ""
+---
+
+This is **Writings** — the Saint Gordon Collective notebook.
+
+Everything here is kept stripped down on purpose: raw notes from late-night sessions, vocal mixing chains, behind-the-scenes stories behind new releases, and updates whenever we build new browser tools for independent artists.
+
+> Keep the rough edges. Keep music about the art.
+
+### What you'll find here
+
+- **Release Notes** — the stories, lyrics, and demos behind each drop in *The Collection*.
+- **Vocal & Mix Breakdowns** — how we treat dry stems, set tempo-synced reverb pre-delay, and check masters before release.
+- **Tool Dispatches** — updates to the free in-browser [Saint Gordon Studio Tools](https://saintgordon.vercel.app/tools).
+
+---
+
+*This starter post can be edited or deleted anytime from the private `/admin` portal.*

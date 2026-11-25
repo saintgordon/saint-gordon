@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="Writings by Saint Gordon Collective — studio notes, vocal mix breakdowns, release diaries, and essays. Auto-organized newest first with instant search."
+    />
+    <title>Writings — Saint Gordon Collective</title>
+    <!-- OpenGraph & Social Share -->
+    <meta name="theme-color" content="#101010" />
+    <link rel="canonical" href="https://saintgordon.vercel.app/writings" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Saint Gordon Collective" />
+    <meta property="og:url" content="https://saintgordon.vercel.app/writings" />
+    <meta property="og:title" content="Writings — Saint Gordon Collective" />
+    <meta property="og:description" content="Studio notes, vocal mix breakdowns, release diaries, and dispatches from Saint Gordon Collective." />
+    <meta property="og:image" content="https://saintgordon.vercel.app/assets/og-writings.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Writings — Saint Gordon Collective journal and studio notes." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Writings — Saint Gordon Collective" />
+    <meta name="twitter:description" content="Studio notes, vocal mix breakdowns, release diaries, and dispatches from Saint Gordon Collective." />
+    <meta name="twitter:image" content="https://saintgordon.vercel.app/assets/og-writings.png" />
+    <meta name="twitter:image:alt" content="Writings — Saint Gordon Collective journal and studio notes." />
+    <!-- /OpenGraph & Social Share -->
+    <link rel="alternate" type="application/rss+xml" title="Saint Gordon Writings RSS" href="writings/feed.xml" />
+    <link rel="icon" href="assets/icons/mark.svg" type="image/svg+xml" />
+    <link
+      rel="preload"
+      href="assets/fonts/OPTIEngraversOldEnglish.woff"
+      as="font"
+      type="font/woff"
+      crossorigin
+    />
+    <link rel="stylesheet" href="css/style.css?v=20261125-writings" />
+    <link rel="stylesheet" href="css/writings.css?v=20261125-writings" />
+    <script src="js/artists.js?v=20261104-122000" defer></script>
+    <script src="js/content.js?v=20261104-122000" defer></script>
+    <script src="js/catalogue.js?v=20261104-122000" defer></script>
+    <script src="js/tracks.js?v=20261104-122000" defer></script>
+    <script src="js/soundcloud-data.js?v=20261118-184933-237071" defer></script>
+    <script src="js/player.js?v=20261104-122000" defer></script>
+    <script src="js/playlist-sync.js?v=20261104-122000" defer></script>
+    <script src="js/carousel.js?v=20261104-122000" defer></script>
+    <script src="js/site.js?v=profile-sync-2" defer></script>
+    <script src="js/writings-markdown.js?v=20261125-writings" defer></script>
+    <script src="js/writings-public.js?v=20261125-writings" defer></script>
+  </head>
+  <body data-page="writings">
+    <a class="skip" href="#main">Skip to writings</a>
+    <header class="header">
+      <a
+        class="brand"
+        href="index.html"
+        aria-label="Saint Gordon Collective home"
+      >
+        Saint Gordon
+        <span>COLLECTIVE</span>
+      </a>
+      <button
+        class="menu-toggle"
+        aria-expanded="false"
+        aria-controls="navigation"
+      >
+        INDEX +
+      </button>
+      <nav id="navigation" aria-label="Main navigation">
+        <a href="index.html">I <span>Home</span></a>
+        <a href="collection.html">II <span>The Collection</span></a>
+        <a href="about.html">III <span>About</span></a>
+        <a href="contact.html">IV <span>Contact Us</span></a>
+        <a href="collaboration.html">V <span>Collaborate</span></a>
+        <a href="tools.html">VI <span>Tools</span></a>
+        <a href="writings.html" aria-current="page">VII <span>Writings</span></a>
+      </nav>
+    </header>
+
+    <main id="main" class="page writings-page">
+      <div class="page-top micro">
+        <span>VII / WRITINGS</span>
+        <span>SORTED NEWEST FIRST · STUDIO NOTES &amp; DISPATCHES</span>
+      </div>
+      <h1 class="page-title">Writings.</h1>
+      <p class="intro writings-intro">
+        Raw notes from the studio — release stories, vocal mixing breakdowns, late-night essays, and updates from Saint Gordon Collective.
+      </p>
+
+      <!-- Live Search, Sort & Tag Filter Bar -->
+      <section class="writings-controls" aria-label="Search and filter writings">
+        <div class="writings-search-row">
+          <label class="writings-search-wrap" for="writings-search-input">
+            <span class="micro writings-search-label">SEARCH WRITINGS</span>
+            <div class="writings-search-box">
+              <input
+                type="search"
+                id="writings-search-input"
+                placeholder="Search titles, notes, tags, or topics..."
+                autocomplete="off"
+              />
+              <button type="button" id="writings-search-clear" class="writings-clear-btn micro hidden">
+                Clear ×
+              </button>
+            </div>
+          </label>
+
+          <div class="writings-sort-wrap">
+            <span class="micro writings-search-label">ORDER</span>
+            <div class="writings-seg" role="group" aria-label="Sort order">
+              <button type="button" class="writings-seg-btn active" data-sort="newest">Newest</button>
+              <button type="button" class="writings-seg-btn" data-sort="oldest">Oldest</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="writings-filter-bar">
+          <div id="writings-tag-filters" class="writings-tag-pills" role="group" aria-label="Filter by tag"></div>
+          <div class="writings-meta-right micro">
+            <span id="writings-result-count">Loading entries…</span>
+            <a href="writings/feed.xml" class="writings-rss-link">RSS ↗</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Dynamic Feed Container -->
+      <section id="writings-feed" class="writings-feed" aria-live="polite">
+        <div class="writings-loading micro">LOADING WRITINGS…</div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-brand">Saint Gordon Collective</div>
+      <div class="footer-nav">
+        <a href="collection.html">The Collection</a>
+        <a href="about.html">About</a>
+        <a href="contact.html">Contact Us</a>
+        <a href="collaboration.html">Collaborate</a>
+        <a href="tools.html">Tools</a>
+        <a href="writings.html">Writings</a>
+        <span data-profile></span>
+      </div>
+      <div class="footer-meta">
+        <span>© <span data-year></span> Saint Gordon Collective</span>
+        <span
+          data-copy="shared.footerTagline"
+          data-copy-base="Independent sound. Imperfect by design."
+        >
+          Independent sound. Imperfect by design.
+        </span>
+        <span class="footer-utility-links">
+          <a href="writings/feed.xml">RSS</a>
+          ·
+          <a href="admin.html">Admin</a>
+          ·
+          <a href="credits.html">Site credits</a>
+        </span>
+      </div>
+    </footer>
+    <noscript>
+      <p class="notice">Enable JavaScript to browse and search Saint Gordon Writings.</p>
+    </noscript>
+  </body>
+</html>

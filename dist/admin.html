@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content="Private admin portal for Saint Gordon Collective Writings." />
+    <title>Admin — Saint Gordon Writings</title>
+    <link rel="icon" href="assets/icons/mark.svg" type="image/svg+xml" />
+    <link
+      rel="preload"
+      href="assets/fonts/OPTIEngraversOldEnglish.woff"
+      as="font"
+      type="font/woff"
+      crossorigin
+    />
+    <link rel="stylesheet" href="css/style.css?v=20261125-writings" />
+    <link rel="stylesheet" href="css/writings.css?v=20261125-writings" />
+    <script src="js/writings-markdown.js?v=20261125-writings" defer></script>
+    <script src="js/writings-admin.js?v=20261125-writings" defer></script>
+  </head>
+  <body data-page="admin">
+    <a class="skip" href="#main">Skip to admin portal</a>
+    <header class="header">
+      <a class="brand" href="index.html" aria-label="Saint Gordon Collective home">
+        Saint Gordon
+        <span>WRITINGS · ADMIN PORTAL</span>
+      </a>
+      <nav id="navigation" aria-label="Admin quick navigation">
+        <a href="writings.html">← <span>Public Writings</span></a>
+        <a href="index.html">I <span>Home</span></a>
+      </nav>
+    </header>
+
+    <main id="main" class="page admin-page">
+      <!-- ==================== PASSWORD-ONLY LOCK SCREEN ==================== -->
+      <section id="admin-lock-screen" class="admin-lock-card" aria-labelledby="lock-heading">
+        <div class="admin-lock-head micro">
+          <span>SAINT GORDON // WRITINGS</span>
+          <span>SHA3-512 AUTH</span>
+        </div>
+        <h1 id="lock-heading" class="admin-lock-title">Writings Admin.</h1>
+        <p class="admin-lock-sub">
+          Enter your admin password to write posts, upload images &amp; video embeds, and manage drafts.
+        </p>
+
+        <form id="admin-login-form" class="admin-lock-form" autocomplete="off">
+          <label class="micro" for="admin-password-input">PASSWORD</label>
+          <input
+            type="password"
+            id="admin-password-input"
+            class="admin-lock-input"
+            placeholder="Enter password..."
+            required
+            autofocus
+          />
+          <div id="admin-login-error" class="admin-lock-error hidden" role="alert"></div>
+          <button type="submit" id="btn-admin-login" class="admin-lock-btn">
+            Unlock Portal ↗
+          </button>
+        </form>
+      </section>
+
+      <!-- ==================== AUTHENTICATED DASHBOARD ==================== -->
+      <section id="admin-dashboard" class="hidden" aria-label="Writings management dashboard">
+        <!-- Top Hardware Control Bar -->
+        <div class="admin-bar">
+          <div class="admin-bar-left">
+            <span class="admin-bar-title">Writings Desk</span>
+            <button type="button" id="btn-cloud-status" class="admin-cloud-pill micro" title="View cloud publishing setup">
+              Checking storage…
+            </button>
+          </div>
+          <div class="admin-bar-actions">
+            <button type="button" id="btn-new-post" class="admin-bar-btn admin-bar-btn-primary">
+              + New Post
+            </button>
+            <a href="writings.html" target="_blank" rel="noopener noreferrer" class="admin-bar-btn">
+              View Public Blog ↗
+            </a>
+            <button type="button" id="btn-admin-logout" class="admin-bar-btn">
+              Sign Out
+            </button>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="admin-tabs" role="tablist" aria-label="Admin sections">
+          <button type="button" class="admin-tab active" role="tab" aria-selected="true" data-tab="posts">
+            All Posts (<span id="tab-posts-count">0</span>)
+          </button>
+          <button type="button" class="admin-tab" role="tab" aria-selected="false" data-tab="editor">
+            Editor
+          </button>
+          <button type="button" class="admin-tab" role="tab" aria-selected="false" data-tab="media">
+            Media Library (<span id="tab-media-count">0</span>)
+          </button>
+          <button type="button" class="admin-tab" role="tab" aria-selected="false" data-tab="setup">
+            Cloud Setup
+          </button>
+        </div>
+
+        <!-- ========== TAB 1: ALL POSTS ========== -->
+        <section id="panel-posts" class="admin-card" aria-label="Manage posts">
+          <div class="admin-posts-toolbar">
+            <div class="writings-seg" role="group" aria-label="Filter posts by status">
+              <button type="button" class="writings-seg-btn active" data-post-filter="all">All</button>
+              <button type="button" class="writings-seg-btn" data-post-filter="published">Published</button>
+              <button type="button" class="writings-seg-btn" data-post-filter="draft">Drafts</button>
+              <button type="button" class="writings-seg-btn" data-post-filter="pinned">Pinned</button>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+              <input
+                type="search"
+                id="admin-posts-search"
+                class="admin-posts-search"
+                placeholder="Search posts..."
+                autocomplete="off"
+              />
+              <button type="button" id="btn-refresh-posts" class="writings-btn writings-btn-outline writings-btn-sm">
+                ↻ Refresh
+              </button>
+            </div>
+          </div>
+
+          <div id="admin-posts-list">
+            <div class="writings-loading micro">LOADING POSTS…</div>
+          </div>
+        </section>
+
+        <!-- ========== TAB 2: WORDPRESS-STYLE MARKDOWN EDITOR ========== -->
+        <section id="panel-editor" class="admin-card hidden" aria-label="Post editor">
+          <div class="editor-meta-grid">
+            <div class="editor-field editor-field-full">
+              <label class="micro" for="ed-title">POST TITLE</label>
+              <input
+                type="text"
+                id="ed-title"
+                class="editor-title-input"
+                placeholder="Enter post title..."
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="editor-field">
+              <label class="micro" for="ed-slug">URL SLUG (AUTO-GENERATED)</label>
+              <input type="text" id="ed-slug" placeholder="my-post-slug" autocomplete="off" />
+            </div>
+
+            <div class="editor-field">
+              <label class="micro" for="ed-date">PUBLISH DATE</label>
+              <input type="date" id="ed-date" />
+            </div>
+
+            <div class="editor-field">
+              <label class="micro" for="ed-tags">TAGS (COMMA SEPARATED)</label>
+              <input type="text" id="ed-tags" placeholder="Notes, Mixing, Releases" autocomplete="off" />
+              <div class="editor-quick-tags" id="ed-quick-tags">
+                <button type="button" class="editor-quick-tag" data-add-tag="Notes">+ Notes</button>
+                <button type="button" class="editor-quick-tag" data-add-tag="Releases">+ Releases</button>
+                <button type="button" class="editor-quick-tag" data-add-tag="Mixing">+ Mixing</button>
+                <button type="button" class="editor-quick-tag" data-add-tag="Studio">+ Studio</button>
+                <button type="button" class="editor-quick-tag" data-add-tag="Tools">+ Tools</button>
+              </div>
+            </div>
+
+            <div class="editor-field">
+              <label class="micro" for="ed-status">STATUS &amp; PIN</label>
+              <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                <select id="ed-status" style="width:auto;min-width:150px;">
+                  <option value="published">Published (Live)</option>
+                  <option value="draft">Draft (Hidden)</option>
+                </select>
+                <label class="micro" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="ed-pinned" />
+                  <span>Pin to top of Writings</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="editor-field editor-field-full">
+              <label class="micro" for="ed-summary">SHORT SUMMARY (SHOWN IN LIST &amp; SEARCH)</label>
+              <input
+                type="text"
+                id="ed-summary"
+                placeholder="Optional 1–2 sentence excerpt (auto-filled from your opening lines if blank)"
+              />
+            </div>
+
+            <div class="editor-field editor-field-full">
+              <label class="micro" for="ed-cover">COVER IMAGE (OPTIONAL)</label>
+              <div class="editor-cover-row">
+                <img id="ed-cover-preview" class="editor-cover-preview hidden" src="assets/icons/mark.svg" alt="Cover preview" />
+                <input
+                  type="text"
+                  id="ed-cover"
+                  style="flex:1;min-width:200px;"
+                  placeholder="writings/media/cover.jpg or https://..."
+                />
+                <input type="file" id="ed-cover-file" accept="image/*" class="hidden" />
+                <button type="button" id="btn-upload-cover" class="writings-btn writings-btn-outline writings-btn-sm">
+                  Upload Cover
+                </button>
+                <label class="micro" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                  <input type="checkbox" id="ed-cover-xerox" />
+                  <span>Xerox Filter</span>
+                </label>
+                <button type="button" id="btn-clear-cover" class="writings-btn writings-btn-outline writings-btn-sm hidden">
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Markdown Formatting & Media Toolbar -->
+          <div class="editor-toolbar">
+            <div class="editor-tool-group" aria-label="Markdown formatting">
+              <button type="button" class="md-tool-btn" data-md="h2" title="Heading 2">H2</button>
+              <button type="button" class="md-tool-btn" data-md="h3" title="Heading 3">H3</button>
+              <button type="button" class="md-tool-btn" data-md="bold" title="Bold">B</button>
+              <button type="button" class="md-tool-btn" data-md="italic" title="Italic">I</button>
+              <button type="button" class="md-tool-btn" data-md="quote" title="Blockquote">“Quote”</button>
+              <button type="button" class="md-tool-btn" data-md="ul" title="Bullet List">• List</button>
+              <button type="button" class="md-tool-btn" data-md="ol" title="Numbered List">1. List</button>
+              <button type="button" class="md-tool-btn" data-md="link" title="Insert Link">Link</button>
+              <button type="button" class="md-tool-btn" data-md="code" title="Code Block">&lt;/&gt;</button>
+              <button type="button" class="md-tool-btn" data-md="hr" title="Horizontal Rule">—</button>
+              <button type="button" id="btn-insert-image" class="md-tool-btn" title="Upload & insert image at cursor">
+                + Image
+              </button>
+              <button type="button" id="btn-insert-video" class="md-tool-btn" title="Embed YouTube, Vimeo, SoundCloud, or upload video clip">
+                + Video / Embed
+              </button>
+              <input type="file" id="ed-inline-image-file" accept="image/*" class="hidden" />
+            </div>
+
+            <div class="editor-tool-group" role="group" aria-label="Editor view mode">
+              <button type="button" class="md-tool-btn active" data-view-mode="split">Split</button>
+              <button type="button" class="md-tool-btn" data-view-mode="write">Write</button>
+              <button type="button" class="md-tool-btn" data-view-mode="preview">Preview</button>
+            </div>
+          </div>
+
+          <div id="editor-workspace" class="editor-workspace mode-split">
+            <textarea
+              id="ed-body"
+              class="editor-textarea"
+              placeholder="Write in normal Markdown...&#10;&#10;• Drag &amp; drop images straight into this box&#10;• Paste a YouTube, Vimeo, or SoundCloud link on its own line to auto-embed it&#10;• Use **bold**, *italic*, ## headings, and > quotes"
+            ></textarea>
+            <div id="ed-preview" class="editor-preview-pane writing-prose" aria-label="Live post preview"></div>
+          </div>
+
+          <div class="editor-footer-bar">
+            <div class="editor-footer-left micro">
+              <span id="ed-stats">0 WORDS · 1 MIN READ</span>
+              <span id="ed-autosave-status">LOCAL DRAFT READY</span>
+            </div>
+            <div class="editor-footer-actions">
+              <button type="button" id="btn-download-md" class="writings-btn writings-btn-outline writings-btn-sm">
+                Download .md
+              </button>
+              <button type="button" id="btn-save-draft" class="writings-btn writings-btn-outline">
+                Save Draft
+              </button>
+              <button type="button" id="btn-publish-post" class="writings-btn">
+                Publish Post ↗
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== TAB 3: MEDIA LIBRARY ========== -->
+        <section id="panel-media" class="admin-card hidden" aria-label="Media library">
+          <input
+            type="file"
+            id="media-upload-input"
+            multiple
+            accept="image/*,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav"
+            class="hidden"
+          />
+          <div id="media-dropzone" class="media-dropzone">
+            <span class="micro">MEDIA LIBRARY // IMAGES, SHORT CLIPS &amp; AUDIO</span>
+            <h2 style="font-size:1.8rem;margin:10px 0 8px;">Drop Images or Short Video Clips Here</h2>
+            <p style="margin:0 0 14px;color:#555555;">
+              Large photos are auto-optimized in your browser before uploading. For long HD videos (&gt; 4 MB), paste a YouTube or Vimeo link inside the editor.
+            </p>
+            <button type="button" id="btn-media-pick" class="writings-btn">Select Files to Upload</button>
+            <div class="media-upload-opts micro">
+              <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" id="media-opt-compress" checked />
+                <span>Auto-optimize large photos</span>
+              </label>
+              <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" id="media-opt-xerox" />
+                <span>Apply Saint Gordon Xerox Filter</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="media-grid" class="media-grid">
+            <div class="writings-loading micro">LOADING MEDIA…</div>
+          </div>
+        </section>
+
+        <!-- ========== TAB 4: CLOUD SETUP ========== -->
+        <section id="panel-setup" class="admin-card hidden" aria-label="Cloud publishing setup">
+          <span class="micro">STORAGE &amp; PUBLISHING SETUP</span>
+          <h2 style="font-size:2.1rem;margin:10px 0 14px;">GitHub-Backed Cloud Publishing</h2>
+          <p id="setup-status-copy" style="max-width:66ch;line-height:1.7;color:#303030;"></p>
+
+          <div style="border:1px solid #101010;background:#f2f2f2;padding:20px 22px;margin:22px 0;">
+            <strong class="micro" style="display:block;margin-bottom:10px;">RECOMMENDED ONE-TIME SETUP (PASSWORD-ONLY PUBLISHING FROM ANY DEVICE)</strong>
+            <ol style="margin:0;padding-left:20px;line-height:1.75;font-size:14px;">
+              <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">GitHub Fine-Grained Tokens ↗</a> and create a token with access to <strong>Only select repositories → <code>saintgordon/saint-gordon</code></strong>.</li>
+              <li>Under <strong>Repository permissions</strong>, set <strong>Contents → Read and write</strong>, then click <strong>Generate token</strong>.</li>
+              <li>In <a href="https://vercel.com/saint-gordon/saintgordon/settings/environment-variables" target="_blank" rel="noopener noreferrer">Vercel → Settings → Environment Variables ↗</a>, add <code>GITHUB_TOKEN</code> with that token and trigger one redeploy.</li>
+            </ol>
+          </div>
+
+          <div style="border-top:1px dashed #b8b8b8;padding-top:20px;margin-top:24px;">
+            <strong class="micro" style="display:block;margin-bottom:8px;">OPTIONAL: BROWSER-ONLY FALLBACK TOKEN</strong>
+            <p style="font-size:14px;color:#555555;margin-bottom:12px;">
+              Want to publish right now before adding the Vercel env var? Paste a scoped GitHub token here — it stays strictly in this browser’s local storage and is sent only with your authenticated admin requests.
+            </p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;max-width:620px;">
+              <input
+                type="password"
+                id="setup-browser-token"
+                style="flex:1;min-width:220px;border:1px solid #101010;padding:10px 12px;font-family:'Courier New',monospace;"
+                placeholder="github_pat_..."
+                autocomplete="off"
+              />
+              <button type="button" id="btn-save-browser-token" class="writings-btn writings-btn-sm">Save in Browser</button>
+              <button type="button" id="btn-clear-browser-token" class="writings-btn writings-btn-outline writings-btn-sm">Clear</button>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <!-- Video / Embed Modal -->
+    <div id="embed-modal" class="admin-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="embed-modal-title">
+      <div class="admin-modal">
+        <span class="micro">INSERT VIDEO OR AUDIO</span>
+        <h3 id="embed-modal-title">Embed Media</h3>
+        <p style="font-size:14px;color:#555555;margin-bottom:16px;">
+          Paste a <strong>YouTube</strong>, <strong>Vimeo</strong>, or <strong>SoundCloud</strong> URL — or upload a short MP4/WebM/MP3 clip directly.
+        </p>
+        <div class="editor-field" style="margin-bottom:14px;">
+          <label class="micro" for="embed-url-input">MEDIA URL</label>
+          <input type="url" id="embed-url-input" placeholder="https://www.youtube.com/watch?v=... or https://soundcloud.com/..." />
+        </div>
+        <div class="editor-field" style="margin-bottom:18px;">
+          <label class="micro" for="embed-caption-input">CAPTION (OPTIONAL)</label>
+          <input type="text" id="embed-caption-input" placeholder="Studio session breakdown..." />
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <div>
+            <input type="file" id="embed-video-file" accept="video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav" class="hidden" />
+            <button type="button" id="btn-upload-clip" class="writings-btn writings-btn-outline writings-btn-sm">
+              Upload Clip (&lt;4 MB)
+            </button>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button type="button" id="btn-embed-cancel" class="writings-btn writings-btn-outline writings-btn-sm">Cancel</button>
+            <button type="button" id="btn-embed-insert" class="writings-btn writings-btn-sm">Insert Embed</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="admin-toast" class="writing-toast micro hidden" role="status" aria-live="polite"></div>
+  </body>
+</html>

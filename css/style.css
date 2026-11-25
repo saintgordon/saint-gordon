@@ -2902,6 +2902,11 @@ h3,
   line-height: 1.6;
   color: #cccccc;
 }
+@media (max-width: 1180px) {
+  .header nav {
+    gap: 20px;
+  }
+}
 @media (max-width: 1060px) {
   .header nav {
     gap: 18px;
