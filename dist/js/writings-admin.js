@@ -285,9 +285,9 @@
           "<span>" +
           MD.escapeHtml(p.date || "") +
           "</span>" +
-          "<span>· " +
-          (p.wordCount || 0) +
-          " WORDS</span>" +
+          "<span>· READING TIME: " +
+          (p.wordCount ? Math.max(1, Math.round(p.wordCount / 210)) : (p.readingTimeMin || 1)) +
+          " MIN</span>" +
           (tagsStr ? "<span>· " + MD.escapeHtml(tagsStr) + "</span>" : "") +
           "</div>" +
           "</div>" +
@@ -426,7 +426,7 @@
     const plain = MD.stripMarkdown(body);
     const words = plain ? plain.split(/\s+/).filter(Boolean).length : 0;
     const mins = Math.max(1, Math.round(words / 210));
-    dom.edStats.textContent = words + " WORDS · " + mins + " MIN READ";
+    dom.edStats.textContent = "READING TIME: " + mins + " MIN";
 
     const titleHtml = dom.edTitle.value.trim()
       ? '<h1 class="writing-title" style="font-size:2.4rem;margin-bottom:12px;">' +
