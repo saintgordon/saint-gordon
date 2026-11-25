@@ -406,13 +406,13 @@ def verify_login_envelope(
     _prune_caches(ts)
 
     if not nonce or not isinstance(nonce, str) or len(nonce) != 64:
-        return False, "Invalid login challenge."
+        return False, "Invalid request."
     try:
         exp_int = int(exp)
     except Exception:
-        return False, "Invalid challenge expiry."
+        return False, "Invalid request."
     if ts > exp_int or exp_int > ts + CHALLENGE_TTL_SECONDS + 10:
-        return False, "Login challenge expired. Please try again."
+        return False, "Session expired. Please try again."
 
     server_d, server_pub_hex = get_server_ecdh_keypair()
     expected_sig = hmac.new(
@@ -421,29 +421,29 @@ def verify_login_envelope(
         hashlib.sha256,
     ).hexdigest()
     if not isinstance(sig, str) or not hmac.compare_digest(sig.lower(), expected_sig):
-        return False, "Invalid challenge signature."
+        return False, "Invalid request."
 
     if nonce in _USED_NONCES:
-        return False, "Login challenge already used. Please try again."
+        return False, "Session expired. Please try again."
     if consume_nonce:
         _USED_NONCES[nonce] = exp_int + 10
 
     client_pt = _p256_decode_uncompressed(epk_hex)
     if client_pt is None:
-        return False, "Invalid encrypted login envelope."
+        return False, "Invalid request."
     if not isinstance(ct_hex, str) or len(ct_hex) != _ENVELOPE_BLOCK_BYTES * 2:
-        return False, "Invalid encrypted login envelope."
+        return False, "Invalid request."
     if not isinstance(tag_hex, str) or len(tag_hex) != 64:
-        return False, "Invalid encrypted login envelope."
+        return False, "Invalid request."
     try:
         epk_bytes = bytes.fromhex(epk_hex)
         ct_bytes = bytes.fromhex(ct_hex)
     except ValueError:
-        return False, "Invalid encrypted login envelope."
+        return False, "Invalid request."
 
     shared_pt = _p256_scalar_mult(server_d, client_pt)
     if shared_pt is None:
-        return False, "Invalid encrypted login envelope."
+        return False, "Invalid request."
     shared = shared_pt[0].to_bytes(32, "big")
 
     enc_key, mac_key = _derive_envelope_keys(shared, nonce, epk_bytes)
@@ -453,27 +453,27 @@ def verify_login_envelope(
         hashlib.sha256,
     ).hexdigest()
     if not hmac.compare_digest(tag_hex.lower(), expected_tag):
-        return False, "Encrypted login integrity check failed."
+        return False, "Invalid request."
 
     block = _envelope_xor_stream(enc_key, ct_bytes)
     msg_len = int.from_bytes(block[:2], "big")
     if msg_len == 0 or msg_len > _ENVELOPE_BLOCK_BYTES - 2:
-        return False, "Malformed encrypted login payload."
+        return False, "Invalid request."
 
     try:
         payload = json.loads(block[2:2 + msg_len].decode("utf-8"))
     except Exception:
-        return False, "Malformed encrypted login payload."
+        return False, "Invalid request."
 
     if not isinstance(payload, dict):
-        return False, "Malformed encrypted login payload."
+        return False, "Invalid request."
     inner_nonce = str(payload.get("n") or "")
     try:
         inner_exp = int(payload.get("e") or 0)
     except Exception:
         inner_exp = 0
     if not hmac.compare_digest(inner_nonce, nonce) or inner_exp != exp_int:
-        return False, "Login challenge mismatch."
+        return False, "Invalid request."
 
     pwd = payload.get("p")
     if not verify_password(pwd if isinstance(pwd, str) else ""):
@@ -1153,12 +1153,9 @@ class handler(BaseHTTPRequestHandler):
                 )
                 return
 
-            # Reject plaintext password transmission — enforce E2E encrypted login envelope
+            # Reject plaintext password transmission
             if "password" in body:
-                self._send_json(
-                    400,
-                    {"error": "Plaintext password submission is disabled. Refresh the page and sign in securely."},
-                )
+                self._send_json(400, {"error": "Invalid request."})
                 return
 
             ok, err_msg = verify_login_envelope(

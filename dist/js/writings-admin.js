@@ -263,7 +263,7 @@
       state.authenticated = Boolean(data.authenticated);
       state.cloudConfigured = Boolean(data.cloudConfigured);
       if (!state.authenticated && Number(data.retryAfter || 0) > 0) {
-        startLockoutCountdown(data.retryAfter, "Anti-bruteforce timeout active.");
+        startLockoutCountdown(data.retryAfter, "Please wait before trying again.");
       }
     } catch (err) {
       if (err && (err.status === 404 || err.status === 403 || err.code === "GEO_BLOCKED")) {
@@ -296,7 +296,7 @@
     const pwd = dom.passwordInput.value;
     if (!pwd) return;
     if (!CRYPTO || typeof CRYPTO.sealLoginEnvelope !== "function") {
-      dom.loginError.textContent = "Crypto module failed to load. Refresh over HTTPS and try again.";
+      dom.loginError.textContent = "Unable to sign in right now. Refresh and try again.";
       dom.loginError.classList.remove("hidden");
       return;
     }
