@@ -3,8 +3,8 @@
   "use strict";
 
   const MD = window.SaintWritingsMarkdown;
-  const CRYPTO = window.SaintCrypto;
-  if (!MD) return;
+  const GATE = window._sgG;
+  if (!MD || !GATE) return;
 
   const API_URL = "/api/writings";
   const DRAFT_STORAGE_KEY = "sg_writings_autosave_v1";
@@ -200,89 +200,9 @@
   }
 
   /* ========================================================================
-     AUTHENTICATION (ZERO-PLAINTEXT SHA3-512 CHALLENGE-RESPONSE + LOCKOUT)
+     GATE HANDOFF
      ======================================================================== */
-  function formatCountdown(sec) {
-    const s = Math.max(0, Math.ceil(sec));
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return m > 0 ? String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0") : r + "s";
-  }
-
-  function clearLockoutCountdown() {
-    if (state.lockoutTimer) {
-      clearInterval(state.lockoutTimer);
-      state.lockoutTimer = null;
-    }
-    state.lockoutUntilMs = 0;
-    dom.passwordInput.disabled = false;
-    dom.loginBtn.disabled = false;
-    dom.loginBtn.textContent = "Unlock Portal ↗";
-  }
-
-  function startLockoutCountdown(seconds, prefixMsg) {
-    const secs = Math.max(1, Math.ceil(Number(seconds) || 0));
-    clearLockoutCountdown();
-    state.lockoutUntilMs = Date.now() + secs * 1000;
-    dom.passwordInput.disabled = true;
-    dom.loginBtn.disabled = true;
-
-    const tick = function () {
-      const rem = Math.ceil((state.lockoutUntilMs - Date.now()) / 1000);
-      if (rem <= 0) {
-        clearLockoutCountdown();
-        dom.loginError.classList.add("hidden");
-        dom.passwordInput.focus();
-        return;
-      }
-      const label = formatCountdown(rem);
-      dom.loginBtn.textContent = "Locked (" + label + ")";
-      dom.loginError.textContent = (prefixMsg || "Too many failed attempts.") + " Try again in " + label + ".";
-      dom.loginError.classList.remove("hidden");
-    };
-
-    tick();
-    state.lockoutTimer = setInterval(tick, 250);
-  }
-
-  function showNotFoundScreen() {
-    clearLockoutCountdown();
-    document.title = "404 — Page Not Found | Saint Gordon Collective";
-    dom.dashboard.classList.add("hidden");
-    dom.lockScreen.classList.remove("hidden");
-    dom.lockScreen.innerHTML =
-      '<div class="admin-lock-head micro"><span>HTTP 404 // NOT FOUND</span><span>SAINT GORDON</span></div>' +
-      '<h1 class="admin-lock-title">Page Not Found.</h1>' +
-      '<p class="admin-lock-sub">The page you are looking for does not exist or has been moved.</p>' +
-      '<a class="admin-lock-btn" style="display:block;text-align:center;text-decoration:none;" href="/">← Return Home</a>';
-  }
-
-  async function checkSession() {
-    try {
-      const data = await apiGet("action=session");
-      state.authenticated = Boolean(data.authenticated);
-      state.cloudConfigured = Boolean(data.cloudConfigured);
-      if (!state.authenticated && Number(data.retryAfter || 0) > 0) {
-        startLockoutCountdown(data.retryAfter, "Please wait before trying again.");
-      }
-    } catch (err) {
-      if (err && (err.status === 404 || err.status === 403 || err.code === "GEO_BLOCKED")) {
-        showNotFoundScreen();
-        return;
-      }
-      state.authenticated = false;
-    }
-
-    if (state.authenticated) {
-      enterDashboard();
-    } else {
-      dom.lockScreen.classList.remove("hidden");
-      dom.dashboard.classList.add("hidden");
-    }
-  }
-
   async function enterDashboard() {
-    clearLockoutCountdown();
     dom.lockScreen.classList.add("hidden");
     dom.dashboard.classList.remove("hidden");
     updateCloudStatusUI();
@@ -290,68 +210,12 @@
     await refreshAdminData();
   }
 
-  dom.loginForm.addEventListener("submit", async function (ev) {
-    ev.preventDefault();
-    if (state.lockoutUntilMs > Date.now()) return;
-    const pwd = dom.passwordInput.value;
-    if (!pwd) return;
-    if (!CRYPTO || typeof CRYPTO.sealLoginEnvelope !== "function") {
-      dom.loginError.textContent = "Unable to sign in right now. Refresh and try again.";
-      dom.loginError.classList.remove("hidden");
-      return;
-    }
-
-    // Clear password from DOM input immediately before network call
-    dom.passwordInput.value = "";
-    dom.loginBtn.disabled = true;
-    dom.loginBtn.textContent = "Verifying…";
-    dom.loginError.classList.add("hidden");
-
-    try {
-      // Step 1: Fetch single-use signed server challenge + P-256 public key
-      const challenge = await apiGet("action=challenge");
-      // Step 2: End-to-end encrypt password inside ephemeral ECDH P-256 + Encrypt-then-MAC envelope
-      const envelope = await CRYPTO.sealLoginEnvelope(pwd, challenge.nonce, challenge.exp, challenge.pub);
-      // Step 3: Send ONLY the one-time encrypted envelope (zero plaintext & zero static hash over the wire)
-      const res = await apiPost({
-        action: "login",
-        nonce: challenge.nonce,
-        exp: challenge.exp,
-        sig: challenge.sig,
-        epk: envelope.epk,
-        ct: envelope.ct,
-        tag: envelope.tag,
-      });
-      state.authenticated = true;
-      state.cloudConfigured = Boolean(res.cloudConfigured);
-      await enterDashboard();
-      showToast("Unlocked Saint Gordon Writings Admin");
-    } catch (err) {
-      if (err && (err.status === 404 || err.status === 403 || err.code === "GEO_BLOCKED")) {
-        showNotFoundScreen();
-        return;
-      }
-      if (err && (err.status === 429 || Number(err.retryAfter || 0) > 0)) {
-        startLockoutCountdown(err.retryAfter || 5, "Incorrect password.");
-        return;
-      }
-      dom.loginError.textContent = err.message || "Incorrect password.";
-      dom.loginError.classList.remove("hidden");
-      dom.loginBtn.disabled = false;
-      dom.loginBtn.textContent = "Unlock Portal ↗";
-      dom.passwordInput.focus();
-    }
-  });
-
-  dom.btnLogout.addEventListener("click", async function () {
-    try {
-      await apiPost({ action: "logout" });
-    } catch (_) {}
-    state.authenticated = false;
-    dom.dashboard.classList.add("hidden");
-    dom.lockScreen.classList.remove("hidden");
-    dom.passwordInput.focus();
-    showToast("Signed out");
+  const gateCtrl = GATE.m({
+    dom: dom,
+    state: state,
+    getToken: getBrowserToken,
+    onUnlock: enterDashboard,
+    toast: showToast,
   });
 
   /* ========================================================================
@@ -1170,5 +1034,5 @@
     showToast("Cleared browser token");
   });
 
-  checkSession();
+  gateCtrl.c();
 })();

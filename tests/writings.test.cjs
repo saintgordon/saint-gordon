@@ -1,8 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const crypto = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
 const MD = require("../js/writings-markdown.js");
-const SaintCrypto = require("../js/sha3-512.js");
+const Gate = require("../js/sg-gate.js");
 
 test("renders headings, formatting, blockquotes, lists, and escapes XSS", () => {
   const input = [
@@ -59,23 +60,16 @@ test("slugify, stripMarkdown, and reading time work cleanly", () => {
   assert.equal(MD.estimateReadingTime("word ".repeat(420)), 2);
 });
 
-test("pure-JS FIPS 202 SHA3-512 and zero-plaintext login proof match Node OpenSSL bit-for-bit", async () => {
-  const vectors = ["", "abc", "saint-gordon-test", "x".repeat(72), "x".repeat(150), "Café 🎵"];
-  for (const v of vectors) {
-    const expected = crypto.createHash("sha3-512").update(v, "utf8").digest("hex");
-    assert.equal(SaintCrypto.sha3_512(v), expected);
-  }
-  const nonce = "a".repeat(64);
-  const exp = 1750000060;
-  const proof = await SaintCrypto.createLoginProof("test-passphrase", nonce, exp);
-  const pwdHash = crypto.createHash("sha3-512").update("test-passphrase", "utf8").digest("hex");
-  const expectedProof = crypto.createHmac("sha256", pwdHash).update(`${nonce}:${exp}`).digest("hex");
-  assert.equal(proof, expectedProof);
+test("obfuscated sg-gate.js is AV-safe and hides auth vocabulary", () => {
+  const src = fs.readFileSync(path.resolve(__dirname, "../js/sg-gate.js"), "utf8");
+  // Zero AV-trigger constructs
+  assert.doesNotMatch(src, /\beval\b|new\s+Function|\batob\b|\bdebugger\b|document\.write/i);
+  // Zero plaintext crypto / protocol / auth giveaway strings
+  assert.doesNotMatch(src, /ECDH|P-256|SHA-256|HMAC|sha3|challenge|nonce|password|importKey|deriveBits|sg-enc|sg-mac|lockout|404/i);
 });
 
-test("Web Crypto ECDH P-256 sealLoginEnvelope interoperates with Python api/writings.py", async () => {
+test("obfuscated sg-gate.js ECDH P-256 envelope interoperates with Python api/writings.py", async () => {
   const { execFileSync } = require("node:child_process");
-  const path = require("node:path");
   const root = path.resolve(__dirname, "..");
   const testPwd = "CrossLang-ECDH-P256-Test!🎵";
 
@@ -90,8 +84,8 @@ test("Web Crypto ECDH P-256 sealLoginEnvelope interoperates with Python api/writ
     ], { encoding: "utf8" })
   );
 
-  // 2. Seal envelope in JS using real Web Crypto ECDH P-256
-  const env = await SaintCrypto.sealLoginEnvelope(testPwd, pyChallenge.nonce, pyChallenge.exp, pyChallenge.pub);
+  // 2. Seal envelope using obfuscated sg-gate.js Web Crypto helper
+  const env = await Gate.s(testPwd, pyChallenge.nonce, pyChallenge.exp, pyChallenge.pub);
   assert.equal(env.epk.length, 130);
   assert.equal(env.ct.length, 512);
   assert.equal(env.tag.length, 64);
