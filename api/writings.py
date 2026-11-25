@@ -32,6 +32,7 @@ import mimetypes
 import os
 from pathlib import Path
 import re
+import secrets
 import time
 import urllib.error
 import urllib.parse
@@ -55,9 +56,46 @@ DEFAULT_GITHUB_BRANCH = "main"
 SITE_ORIGIN = "https://saintgordon.vercel.app"
 
 SESSION_COOKIE_NAME = "sg_writings_session"
+LOCKOUT_COOKIE_NAME = "sg_writings_bf"
 SESSION_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
+CHALLENGE_TTL_SECONDS = 60  # One-time login challenge expires in 60 seconds
 MAX_JSON_BODY_BYTES = 5 * 1024 * 1024
 MAX_MEDIA_RAW_BYTES = 4_200_000  # Safely under Vercel's 4.5 MB serverless limit
+
+# Admin Geo-Blocker: China (CN), Israel (IL), Russia (RU), Iran (IR), India (IN)
+BLOCKED_ADMIN_COUNTRIES = frozenset({"CN", "IL", "RU", "IR", "IN"})
+BLOCKED_COUNTRY_NAMES = {
+    "CN": "China",
+    "IL": "Israel",
+    "RU": "Russia",
+    "IR": "Iran",
+    "IN": "India",
+}
+
+# Exponential anti-bruteforce lockout schedule (seconds per consecutive failed attempt)
+LOCKOUT_SCHEDULE_SECONDS = (5, 15, 30, 120, 300, 900)
+LOCKOUT_STATE_EXPIRY_SECONDS = 1800
+
+# Actions restricted to admin (subject to geo-blocker)
+ADMIN_ACTIONS = frozenset({
+    "geo_blocked",
+    "challenge",
+    "login",
+    "logout",
+    "session",
+    "admin_list",
+    "list_media",
+    "save_post",
+    "delete_post",
+    "toggle_status",
+    "toggle_pin",
+    "upload_media",
+    "delete_media",
+})
+
+# Warm-instance anti-bruteforce & one-time nonce replay caches (paired with signed HttpOnly lockout cookie)
+_IP_LOCKOUT_STATE: dict[str, dict] = {}
+_USED_NONCES: dict[str, int] = {}
 
 ALLOWED_MEDIA_EXTS = {
     ".jpg": "image/jpeg",
@@ -141,6 +179,163 @@ def verify_session_token(token: str | None, now: int | None = None) -> bool:
         return False
     ts = int(time.time()) if now is None else int(now)
     return ts < exp
+
+
+# ---------------------------------------------------------------------------
+# Geo-Blocker, Zero-Plaintext Challenge-Response & Exponential Anti-Bruteforce
+# ---------------------------------------------------------------------------
+
+def get_request_country(headers) -> str:
+    if not headers:
+        return ""
+    for key in ("X-Vercel-IP-Country", "x-vercel-ip-country", "CF-IPCountry", "cf-ipcountry"):
+        val = headers.get(key)
+        if val:
+            return str(val).strip().upper()[:2]
+    return ""
+
+
+def is_country_blocked(country_code: str) -> bool:
+    return (country_code or "").strip().upper() in BLOCKED_ADMIN_COUNTRIES
+
+
+def get_client_ip_key(headers, fallback_addr: str = "") -> str:
+    raw_ip = ""
+    if headers:
+        xff = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for") or ""
+        if xff:
+            raw_ip = xff.split(",")[0].strip()
+        if not raw_ip:
+            raw_ip = (headers.get("X-Real-IP") or headers.get("x-real-ip") or "").strip()
+    if not raw_ip:
+        raw_ip = fallback_addr or "unknown"
+    return hashlib.sha256(f"sg-ip::{raw_ip}".encode("utf-8")).hexdigest()[:32]
+
+
+def _prune_caches(now: int) -> None:
+    expired_nonces = [n for n, exp in _USED_NONCES.items() if exp < now]
+    for n in expired_nonces:
+        _USED_NONCES.pop(n, None)
+    stale_ips = [
+        k for k, st in _IP_LOCKOUT_STATE.items()
+        if now - int(st.get("last_fail", 0)) > LOCKOUT_STATE_EXPIRY_SECONDS and now >= int(st.get("locked_until", 0))
+    ]
+    for k in stale_ips:
+        _IP_LOCKOUT_STATE.pop(k, None)
+
+
+def create_login_challenge(now: int | None = None) -> dict:
+    ts = int(time.time()) if now is None else int(now)
+    nonce = secrets.token_hex(32)
+    exp = ts + CHALLENGE_TTL_SECONDS
+    msg = f"challenge:{nonce}:{exp}".encode("ascii")
+    sig = hmac.new(_session_secret(), msg, hashlib.sha256).hexdigest()
+    return {"nonce": nonce, "exp": exp, "sig": sig}
+
+
+def compute_expected_login_proof(nonce: str, exp: int, expected_sha3_512: str | None = None) -> str:
+    key_hex = (expected_sha3_512 or get_expected_password_hash()).strip().lower()
+    msg = f"{nonce}:{exp}".encode("ascii")
+    return hmac.new(key_hex.encode("ascii"), msg, hashlib.sha256).hexdigest()
+
+
+def verify_login_challenge_proof(
+    nonce: str,
+    exp: int,
+    sig: str,
+    proof: str,
+    *,
+    now: int | None = None,
+    consume_nonce: bool = True,
+) -> tuple[bool, str]:
+    ts = int(time.time()) if now is None else int(now)
+    _prune_caches(ts)
+
+    if not nonce or not isinstance(nonce, str) or len(nonce) != 64:
+        return False, "Invalid login challenge."
+    try:
+        exp_int = int(exp)
+    except Exception:
+        return False, "Invalid challenge expiry."
+    if ts > exp_int or exp_int > ts + CHALLENGE_TTL_SECONDS + 10:
+        return False, "Login challenge expired. Please try again."
+
+    expected_sig = hmac.new(
+        _session_secret(),
+        f"challenge:{nonce}:{exp_int}".encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not isinstance(sig, str) or not hmac.compare_digest(sig.lower(), expected_sig):
+        return False, "Invalid challenge signature."
+
+    if nonce in _USED_NONCES:
+        return False, "Login challenge already used. Please try again."
+    if consume_nonce:
+        _USED_NONCES[nonce] = exp_int + 10
+
+    if not isinstance(proof, str) or len(proof) != 64:
+        return False, "Incorrect password."
+    expected_proof = compute_expected_login_proof(nonce, exp_int)
+    if not hmac.compare_digest(proof.lower(), expected_proof):
+        return False, "Incorrect password."
+    return True, "ok"
+
+
+def encode_lockout_cookie(fails: int, locked_until: int) -> str:
+    payload = {"f": int(fails), "u": int(locked_until)}
+    body = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    sig = _b64url_encode(hmac.new(_session_secret(), f"bf:{body}".encode("ascii"), hashlib.sha256).digest())
+    return f"{body}.{sig}"
+
+
+def decode_lockout_cookie(raw_cookie: str | None, now: int | None = None) -> tuple[int, int]:
+    if not raw_cookie or "." not in raw_cookie:
+        return 0, 0
+    body, sig_b64 = raw_cookie.split(".", 1)
+    expected = _b64url_encode(hmac.new(_session_secret(), f"bf:{body}".encode("ascii"), hashlib.sha256).digest())
+    if not hmac.compare_digest(sig_b64, expected):
+        return 0, 0
+    try:
+        data = json.loads(_b64url_decode(body).decode("utf-8"))
+        fails = max(0, int(data.get("f", 0)))
+        locked_until = max(0, int(data.get("u", 0)))
+    except Exception:
+        return 0, 0
+    ts = int(time.time()) if now is None else int(now)
+    if ts - locked_until > LOCKOUT_STATE_EXPIRY_SECONDS and ts >= locked_until:
+        return 0, 0
+    return fails, locked_until
+
+
+def get_lockout_status(ip_key: str, lockout_cookie: str | None, now: int | None = None) -> tuple[int, int, int]:
+    """Return (effective_fails, locked_until_ts, retry_after_seconds)."""
+    ts = int(time.time()) if now is None else int(now)
+    _prune_caches(ts)
+    ip_st = _IP_LOCKOUT_STATE.get(ip_key) or {}
+    ip_fails = int(ip_st.get("fails", 0))
+    ip_until = int(ip_st.get("locked_until", 0))
+    ck_fails, ck_until = decode_lockout_cookie(lockout_cookie, now=ts)
+
+    fails = max(ip_fails, ck_fails)
+    locked_until = max(ip_until, ck_until)
+    remaining = max(0, locked_until - ts)
+    return fails, locked_until, remaining
+
+
+def record_failed_login(ip_key: str, lockout_cookie: str | None, now: int | None = None) -> tuple[int, int, int, str]:
+    """Increment failure counter and return (fails, locked_until, timeout_sec, signed_cookie_val)."""
+    ts = int(time.time()) if now is None else int(now)
+    prev_fails, _, _ = get_lockout_status(ip_key, lockout_cookie, now=ts)
+    fails = prev_fails + 1
+    idx = min(fails - 1, len(LOCKOUT_SCHEDULE_SECONDS) - 1)
+    timeout_sec = LOCKOUT_SCHEDULE_SECONDS[idx]
+    locked_until = ts + timeout_sec
+    _IP_LOCKOUT_STATE[ip_key] = {"fails": fails, "locked_until": locked_until, "last_fail": ts}
+    return fails, locked_until, timeout_sec, encode_lockout_cookie(fails, locked_until)
+
+
+def clear_failed_logins(ip_key: str) -> None:
+    _IP_LOCKOUT_STATE.pop(ip_key, None)
 
 
 # ---------------------------------------------------------------------------
@@ -506,7 +701,7 @@ class handler(BaseHTTPRequestHandler):
     def _is_https(self) -> bool:
         return self.headers.get("X-Forwarded-Proto", "").lower() == "https" or os.environ.get("VERCEL") == "1"
 
-    def _get_session_cookie(self) -> str | None:
+    def _get_cookie(self, name: str) -> str | None:
         raw = self.headers.get("Cookie", "")
         if not raw:
             return None
@@ -515,8 +710,21 @@ class handler(BaseHTTPRequestHandler):
             jar.load(raw)
         except Exception:
             return None
-        morsel = jar.get(SESSION_COOKIE_NAME)
+        morsel = jar.get(name)
         return morsel.value if morsel else None
+
+    def _get_session_cookie(self) -> str | None:
+        return self._get_cookie(SESSION_COOKIE_NAME)
+
+    def _get_lockout_cookie(self) -> str | None:
+        return self._get_cookie(LOCKOUT_COOKIE_NAME)
+
+    def _client_ip_key(self) -> str:
+        fallback = self.client_address[0] if getattr(self, "client_address", None) else ""
+        return get_client_ip_key(self.headers, fallback_addr=fallback)
+
+    def _is_geo_blocked(self) -> bool:
+        return is_country_blocked(get_request_country(self.headers))
 
     def _is_authenticated(self) -> bool:
         return verify_session_token(self._get_session_cookie())
@@ -528,17 +736,52 @@ class handler(BaseHTTPRequestHandler):
         header_token = (self.headers.get("X-GitHub-Token") or "").strip()
         return header_token
 
-    def _send_json(self, status: int, data: dict | list, *, cache: str = "no-store", set_cookie: str | None = None):
+    def _send_json(
+        self,
+        status: int,
+        data: dict | list,
+        *,
+        cache: str = "no-store",
+        set_cookies: list[str] | None = None,
+        extra_headers: dict[str, str] | None = None,
+    ):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", cache)
         self.send_header("X-Content-Type-Options", "nosniff")
-        if set_cookie is not None:
-            self.send_header("Set-Cookie", set_cookie)
+        if extra_headers:
+            for k, v in extra_headers.items():
+                self.send_header(k, v)
+        if set_cookies:
+            for ck in set_cookies:
+                self.send_header("Set-Cookie", ck)
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def _send_geo_blocked_html(self):
+        html = (
+            "<!doctype html><html lang='en'><head><meta charset='utf-8'/>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'/>"
+            "<meta name='robots' content='noindex,nofollow'/>"
+            "<title>403 — Access Restricted | Saint Gordon Collective</title>"
+            "<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f2f2f2;color:#101010;"
+            "font-family:'Courier New',monospace;padding:24px;}main{max-width:520px;background:#fff;border:1px solid #101010;"
+            "padding:36px;box-shadow:7px 7px 0 #101010;}h1{font-family:Georgia,serif;margin:12px 0 10px;font-size:28px;}"
+            "p{font-family:Arial,sans-serif;line-height:1.6;color:#303030;}a{color:#101010;}</style></head>"
+            "<body><main><div>HTTP 403 // REGION RESTRICTED</div><h1>Admin Access Unavailable</h1>"
+            "<p>The Saint Gordon Writings admin portal is not accessible from your region.</p>"
+            "<p><a href='/writings'>← Return to Public Writings</a></p></main></body></html>"
+        ).encode("utf-8")
+        self.send_response(403)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Length", str(len(html)))
+        self.end_headers()
+        self.wfile.write(html)
 
     def _read_json_body(self) -> dict:
         length = int(self.headers.get("Content-Length") or "0")
@@ -559,16 +802,46 @@ class handler(BaseHTTPRequestHandler):
         parsed_url = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed_url.query)
         action = (params.get("action", ["list"])[0] or "list").strip().lower()
+
+        if action == "geo_blocked":
+            self._send_geo_blocked_html()
+            return
+
+        if action in ADMIN_ACTIONS and self._is_geo_blocked():
+            self._send_json(403, {"error": "Admin access is restricted in your region.", "code": "GEO_BLOCKED"})
+            return
+
         is_admin = self._is_authenticated()
         token = self._effective_github_token() if is_admin else get_server_github_token()
 
+        if action == "challenge":
+            fails, _, retry_after = get_lockout_status(self._client_ip_key(), self._get_lockout_cookie())
+            if retry_after > 0:
+                self._send_json(
+                    429,
+                    {
+                        "error": f"Too many failed attempts. Please wait {retry_after}s before trying again.",
+                        "code": "RATE_LIMITED",
+                        "retryAfter": retry_after,
+                        "fails": fails,
+                    },
+                    extra_headers={"Retry-After": str(retry_after)},
+                )
+                return
+            ch = create_login_challenge()
+            self._send_json(200, ch)
+            return
+
         if action == "session":
             repo, branch = get_repo_config()
+            fails, _, retry_after = get_lockout_status(self._client_ip_key(), self._get_lockout_cookie())
             self._send_json(200, {
                 "authenticated": is_admin,
                 "cloudConfigured": bool(get_server_github_token()),
                 "repo": repo,
                 "branch": branch,
+                "retryAfter": retry_after,
+                "fails": fails,
             })
             return
 
@@ -639,6 +912,11 @@ class handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self):
+        # All POST actions are admin actions — enforce geo-blocker first before reading body
+        if self._is_geo_blocked():
+            self._send_json(403, {"error": "Admin access is restricted in your region.", "code": "GEO_BLOCKED"})
+            return
+
         try:
             body = self._read_json_body()
         except Exception as err:
@@ -646,18 +924,67 @@ class handler(BaseHTTPRequestHandler):
             return
 
         action = str(body.get("action") or "").strip().lower()
+        secure_attr = "; Secure" if self._is_https() else ""
 
         if action == "login":
-            password = str(body.get("password") or "")
-            if not verify_password(password):
-                time.sleep(0.35)
-                self._send_json(401, {"error": "Incorrect password."})
+            ip_key = self._client_ip_key()
+            lockout_ck = self._get_lockout_cookie()
+            fails, _, retry_after = get_lockout_status(ip_key, lockout_ck)
+            if retry_after > 0:
+                self._send_json(
+                    429,
+                    {
+                        "error": f"Too many failed attempts. Locked for {retry_after}s.",
+                        "code": "RATE_LIMITED",
+                        "retryAfter": retry_after,
+                        "fails": fails,
+                    },
+                    extra_headers={"Retry-After": str(retry_after)},
+                )
                 return
+
+            # Reject plaintext password transmission — enforce zero-plaintext challenge-response
+            if "password" in body:
+                self._send_json(
+                    400,
+                    {"error": "Plaintext password submission is disabled. Refresh the page and sign in securely."},
+                )
+                return
+
+            ok, err_msg = verify_login_challenge_proof(
+                str(body.get("nonce") or ""),
+                body.get("exp"),
+                str(body.get("sig") or ""),
+                str(body.get("proof") or ""),
+            )
+            if not ok:
+                new_fails, _, timeout_sec, bf_val = record_failed_login(ip_key, lockout_ck)
+                time.sleep(0.5)
+                bf_cookie = (
+                    f"{LOCKOUT_COOKIE_NAME}={bf_val}; HttpOnly; Path=/; "
+                    f"SameSite=Strict; Max-Age={LOCKOUT_STATE_EXPIRY_SECONDS}{secure_attr}"
+                )
+                self._send_json(
+                    429 if new_fails >= 1 else 401,
+                    {
+                        "error": f"{err_msg} Wait {timeout_sec}s before trying again.",
+                        "code": "RATE_LIMITED",
+                        "retryAfter": timeout_sec,
+                        "fails": new_fails,
+                    },
+                    set_cookies=[bf_cookie],
+                    extra_headers={"Retry-After": str(timeout_sec)},
+                )
+                return
+
+            clear_failed_logins(ip_key)
             token_val = create_session_token()
-            secure_attr = "; Secure" if self._is_https() else ""
-            cookie_hdr = (
+            session_cookie = (
                 f"{SESSION_COOKIE_NAME}={token_val}; HttpOnly; Path=/; "
                 f"SameSite=Strict; Max-Age={SESSION_TTL_SECONDS}{secure_attr}"
+            )
+            clear_bf_cookie = (
+                f"{LOCKOUT_COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0{secure_attr}"
             )
             repo, branch = get_repo_config()
             self._send_json(
@@ -669,14 +996,13 @@ class handler(BaseHTTPRequestHandler):
                     "repo": repo,
                     "branch": branch,
                 },
-                set_cookie=cookie_hdr,
+                set_cookies=[session_cookie, clear_bf_cookie],
             )
             return
 
         if action == "logout":
-            secure_attr = "; Secure" if self._is_https() else ""
             cookie_hdr = f"{SESSION_COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0{secure_attr}"
-            self._send_json(200, {"ok": True, "authenticated": False}, set_cookie=cookie_hdr)
+            self._send_json(200, {"ok": True, "authenticated": False}, set_cookies=[cookie_hdr])
             return
 
         # Every write action below strictly requires a valid SHA3-512 verified session cookie

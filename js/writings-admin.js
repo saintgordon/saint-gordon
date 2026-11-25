@@ -3,6 +3,7 @@
   "use strict";
 
   const MD = window.SaintWritingsMarkdown;
+  const CRYPTO = window.SaintCrypto;
   if (!MD) return;
 
   const API_URL = "/api/writings";
@@ -20,6 +21,8 @@
     slugManuallyEdited: false,
     viewMode: "split",
     busy: false,
+    lockoutTimer: null,
+    lockoutUntilMs: 0,
   };
 
   const $ = function (id) { return document.getElementById(id); };
@@ -124,7 +127,13 @@
       headers: getBrowserToken() && !state.cloudConfigured ? { "X-GitHub-Token": getBrowserToken() } : {},
     });
     const data = await resp.json().catch(function () { return {}; });
-    if (!resp.ok) throw new Error(data.error || "Request failed (" + resp.status + ")");
+    if (!resp.ok) {
+      const err = new Error(data.error || "Request failed (" + resp.status + ")");
+      err.code = data.code || "";
+      err.status = resp.status;
+      err.retryAfter = Number(data.retryAfter || 0);
+      throw err;
+    }
     return data;
   }
 
@@ -140,6 +149,7 @@
       const err = new Error(data.error || "Request failed (" + resp.status + ")");
       err.code = data.code || "";
       err.status = resp.status;
+      err.retryAfter = Number(data.retryAfter || 0);
       throw err;
     }
     return data;
@@ -190,14 +200,75 @@
   }
 
   /* ========================================================================
-     AUTHENTICATION (PASSWORD-ONLY, SHA3-512 VERIFIED ON VERCEL)
+     AUTHENTICATION (ZERO-PLAINTEXT SHA3-512 CHALLENGE-RESPONSE + LOCKOUT)
      ======================================================================== */
+  function formatCountdown(sec) {
+    const s = Math.max(0, Math.ceil(sec));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return m > 0 ? String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0") : r + "s";
+  }
+
+  function clearLockoutCountdown() {
+    if (state.lockoutTimer) {
+      clearInterval(state.lockoutTimer);
+      state.lockoutTimer = null;
+    }
+    state.lockoutUntilMs = 0;
+    dom.passwordInput.disabled = false;
+    dom.loginBtn.disabled = false;
+    dom.loginBtn.textContent = "Unlock Portal ↗";
+  }
+
+  function startLockoutCountdown(seconds, prefixMsg) {
+    const secs = Math.max(1, Math.ceil(Number(seconds) || 0));
+    clearLockoutCountdown();
+    state.lockoutUntilMs = Date.now() + secs * 1000;
+    dom.passwordInput.disabled = true;
+    dom.loginBtn.disabled = true;
+
+    const tick = function () {
+      const rem = Math.ceil((state.lockoutUntilMs - Date.now()) / 1000);
+      if (rem <= 0) {
+        clearLockoutCountdown();
+        dom.loginError.classList.add("hidden");
+        dom.passwordInput.focus();
+        return;
+      }
+      const label = formatCountdown(rem);
+      dom.loginBtn.textContent = "Locked (" + label + ")";
+      dom.loginError.textContent = (prefixMsg || "Too many failed attempts.") + " Try again in " + label + ".";
+      dom.loginError.classList.remove("hidden");
+    };
+
+    tick();
+    state.lockoutTimer = setInterval(tick, 250);
+  }
+
+  function showGeoBlockedScreen() {
+    clearLockoutCountdown();
+    dom.dashboard.classList.add("hidden");
+    dom.lockScreen.classList.remove("hidden");
+    dom.lockScreen.innerHTML =
+      '<div class="admin-lock-head micro"><span>HTTP 403 // REGION RESTRICTED</span><span>GEO-BLOCKED</span></div>' +
+      '<h1 class="admin-lock-title">Access Restricted.</h1>' +
+      '<p class="admin-lock-sub">The Saint Gordon Writings admin portal is not accessible from your region.</p>' +
+      '<a class="admin-lock-btn" style="display:block;text-align:center;text-decoration:none;" href="writings.html">← Return to Writings</a>';
+  }
+
   async function checkSession() {
     try {
       const data = await apiGet("action=session");
       state.authenticated = Boolean(data.authenticated);
       state.cloudConfigured = Boolean(data.cloudConfigured);
-    } catch (_) {
+      if (!state.authenticated && Number(data.retryAfter || 0) > 0) {
+        startLockoutCountdown(data.retryAfter, "Anti-bruteforce timeout active.");
+      }
+    } catch (err) {
+      if (err && (err.status === 403 || err.code === "GEO_BLOCKED")) {
+        showGeoBlockedScreen();
+        return;
+      }
       state.authenticated = false;
     }
 
@@ -210,6 +281,7 @@
   }
 
   async function enterDashboard() {
+    clearLockoutCountdown();
     dom.lockScreen.classList.add("hidden");
     dom.dashboard.classList.remove("hidden");
     updateCloudStatusUI();
@@ -219,26 +291,52 @@
 
   dom.loginForm.addEventListener("submit", async function (ev) {
     ev.preventDefault();
+    if (state.lockoutUntilMs > Date.now()) return;
     const pwd = dom.passwordInput.value;
     if (!pwd) return;
+    if (!CRYPTO || typeof CRYPTO.createLoginProof !== "function") {
+      dom.loginError.textContent = "Crypto module failed to load. Refresh over HTTPS and try again.";
+      dom.loginError.classList.remove("hidden");
+      return;
+    }
+
+    // Clear password from DOM input immediately before network call
+    dom.passwordInput.value = "";
     dom.loginBtn.disabled = true;
     dom.loginBtn.textContent = "Verifying…";
     dom.loginError.classList.add("hidden");
 
     try {
-      const res = await apiPost({ action: "login", password: pwd });
+      // Step 1: Fetch single-use signed server challenge (never send plaintext password)
+      const challenge = await apiGet("action=challenge");
+      // Step 2: Compute SHA3-512 locally + one-time HMAC-SHA256 proof bound to nonce
+      const proof = await CRYPTO.createLoginProof(pwd, challenge.nonce, challenge.exp);
+      // Step 3: Send ONLY the one-time proof (zero plaintext & zero static hash over the wire)
+      const res = await apiPost({
+        action: "login",
+        nonce: challenge.nonce,
+        exp: challenge.exp,
+        sig: challenge.sig,
+        proof: proof,
+      });
       state.authenticated = true;
       state.cloudConfigured = Boolean(res.cloudConfigured);
-      dom.passwordInput.value = "";
       await enterDashboard();
       showToast("Unlocked Saint Gordon Writings Admin");
     } catch (err) {
+      if (err && (err.status === 403 || err.code === "GEO_BLOCKED")) {
+        showGeoBlockedScreen();
+        return;
+      }
+      if (err && (err.status === 429 || Number(err.retryAfter || 0) > 0)) {
+        startLockoutCountdown(err.retryAfter || 5, "Incorrect password.");
+        return;
+      }
       dom.loginError.textContent = err.message || "Incorrect password.";
       dom.loginError.classList.remove("hidden");
-      dom.passwordInput.select();
-    } finally {
       dom.loginBtn.disabled = false;
       dom.loginBtn.textContent = "Unlock Portal ↗";
+      dom.passwordInput.focus();
     }
   });
 
