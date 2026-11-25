@@ -16,9 +16,9 @@
     />
     <link rel="stylesheet" href="css/style.css?v=20261125-writings" />
     <link rel="stylesheet" href="css/writings.css?v=20261125-writings" />
-    <script src="js/sha3-512.js?v=20261125-sec" defer></script>
-    <script src="js/writings-markdown.js?v=20261125-sec" defer></script>
-    <script src="js/writings-admin.js?v=20261125-sec" defer></script>
+    <script src="js/sha3-512.js?v=20261125-e2e" defer></script>
+    <script src="js/writings-markdown.js?v=20261125-e2e" defer></script>
+    <script src="js/writings-admin.js?v=20261125-e2e" defer></script>
   </head>
   <body data-page="admin">
     <a class="skip" href="#main">Skip to admin portal</a>
@@ -38,11 +38,11 @@
       <section id="admin-lock-screen" class="admin-lock-card" aria-labelledby="lock-heading">
         <div class="admin-lock-head micro">
           <span>SAINT GORDON // WRITINGS</span>
-          <span>ZERO-PLAINTEXT · SHA3-512</span>
+          <span>E2E ENCRYPTED · SHA3-512</span>
         </div>
         <h1 id="lock-heading" class="admin-lock-title">Writings Admin.</h1>
         <p class="admin-lock-sub">
-          Enter your admin password. Verified locally via SHA3-512 challenge-response — your password never leaves this browser in plaintext.
+          Enter your admin password. End-to-end encrypted in your browser (ECDH P-256) before transmission and verified via SHA3-512 — zero plaintext over the wire.
         </p>
 
         <form id="admin-login-form" class="admin-lock-form" autocomplete="off">
@@ -283,7 +283,7 @@
             <span class="micro">MEDIA LIBRARY // IMAGES, SHORT CLIPS &amp; AUDIO</span>
             <h2 style="font-size:1.8rem;margin:10px 0 8px;">Drop Images or Short Video Clips Here</h2>
             <p style="margin:0 0 14px;color:#555555;">
-              Large photos are auto-optimized in your browser before uploading. For long HD videos (&gt; 4 MB), paste a YouTube or Vimeo link inside the editor.
+              Large photos are auto-optimized in your browser before uploading. For long HD videos (&gt; 3 MB), paste a YouTube or Vimeo link inside the editor.
             </p>
             <button type="button" id="btn-media-pick" class="writings-btn">Select Files to Upload</button>
             <div class="media-upload-opts micro">
@@ -359,7 +359,7 @@
           <div>
             <input type="file" id="embed-video-file" accept="video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav" class="hidden" />
             <button type="button" id="btn-upload-clip" class="writings-btn writings-btn-outline writings-btn-sm">
-              Upload Clip (&lt;4 MB)
+              Upload Clip (&lt;3 MB)
             </button>
           </div>
           <div style="display:flex;gap:8px;">

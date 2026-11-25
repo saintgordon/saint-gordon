@@ -129,16 +129,50 @@
     return hex;
   }
 
+  function bytesToHex(bytes) {
+    let hex = "";
+    for (let i = 0; i < bytes.length; i++) {
+      hex += bytes[i].toString(16).padStart(2, "0");
+    }
+    return hex;
+  }
+
+  function hexToBytes(hex) {
+    const clean = String(hex || "").trim();
+    if (!clean || clean.length % 2 !== 0) {
+      throw new Error("Invalid hex input.");
+    }
+    const out = new Uint8Array(clean.length / 2);
+    for (let i = 0; i < out.length; i++) {
+      const v = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+      if (Number.isNaN(v)) throw new Error("Invalid hex byte.");
+      out[i] = v;
+    }
+    return out;
+  }
+
+  function concatBytes() {
+    let total = 0;
+    for (let i = 0; i < arguments.length; i++) total += arguments[i].length;
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (let i = 0; i < arguments.length; i++) {
+      out.set(arguments[i], offset);
+      offset += arguments[i].length;
+    }
+    return out;
+  }
+
   /**
    * Compute HMAC-SHA256 hex digest using native Web Crypto (SubtleCrypto).
    */
-  async function hmacSha256Hex(keyStr, msgStr) {
+  async function hmacSha256Hex(keyInput, msgInput) {
     const subtle = typeof globalThis !== "undefined" && globalThis.crypto && globalThis.crypto.subtle;
     if (!subtle) {
-      throw new Error("Secure Web Crypto (HTTPS) is required for password-free challenge authentication.");
+      throw new Error("Secure Web Crypto (HTTPS) is required for encrypted sign-in.");
     }
-    const keyBytes = utf8ToBytes(keyStr);
-    const msgBytes = utf8ToBytes(msgStr);
+    const keyBytes = keyInput instanceof Uint8Array ? keyInput : utf8ToBytes(keyInput);
+    const msgBytes = msgInput instanceof Uint8Array ? msgInput : utf8ToBytes(msgInput);
     const cryptoKey = await subtle.importKey(
       "raw",
       keyBytes,
@@ -147,17 +181,98 @@
       ["sign"]
     );
     const sigBuf = await subtle.sign("HMAC", cryptoKey, msgBytes);
-    const sigBytes = new Uint8Array(sigBuf);
-    let hex = "";
-    for (let i = 0; i < sigBytes.length; i++) {
-      hex += sigBytes[i].toString(16).padStart(2, "0");
-    }
-    return hex;
+    return bytesToHex(new Uint8Array(sigBuf));
   }
 
   /**
-   * Build one-time zero-plaintext login proof bound to a server challenge (nonce + exp).
-   * Neither the plaintext password nor the raw SHA3-512 hash is ever transmitted.
+   * Seal login password inside an ephemeral NIST P-256 ECDH + Encrypt-then-MAC
+   * fixed-256-byte envelope bound to the server's one-time challenge (nonce + exp).
+   * Neither plaintext password, password length, nor static SHA3-512 hash is sent over the wire.
+   */
+  async function sealLoginEnvelope(password, nonce, exp, serverPubHex) {
+    const gCrypto = typeof globalThis !== "undefined" && globalThis.crypto;
+    const subtle = gCrypto && gCrypto.subtle;
+    if (!subtle || typeof gCrypto.getRandomValues !== "function") {
+      throw new Error("Secure Web Crypto (HTTPS) is required for encrypted sign-in.");
+    }
+
+    const BLOCK_BYTES = 256;
+    const serverPubBytes = hexToBytes(serverPubHex);
+    const serverPubKey = await subtle.importKey(
+      "raw",
+      serverPubBytes,
+      { name: "ECDH", namedCurve: "P-256" },
+      false,
+      []
+    );
+
+    // Fresh ephemeral client P-256 keypair (forward secrecy per attempt)
+    const ephPair = await subtle.generateKey(
+      { name: "ECDH", namedCurve: "P-256" },
+      true,
+      ["deriveBits"]
+    );
+    const epkBytes = new Uint8Array(await subtle.exportKey("raw", ephPair.publicKey));
+    const sharedBuf = await subtle.deriveBits(
+      { name: "ECDH", public: serverPubKey },
+      ephPair.privateKey,
+      256
+    );
+    const shared = new Uint8Array(sharedBuf);
+
+    // Fixed-length 256-byte randomly padded payload (hides password length too)
+    const msgBytes = utf8ToBytes(JSON.stringify({ n: String(nonce), e: Number(exp), p: String(password) }));
+    if (msgBytes.length > BLOCK_BYTES - 2) {
+      throw new Error("Password is too long.");
+    }
+    const block = new Uint8Array(BLOCK_BYTES);
+    gCrypto.getRandomValues(block);
+    block[0] = (msgBytes.length >> 8) & 0xff;
+    block[1] = msgBytes.length & 0xff;
+    block.set(msgBytes, 2);
+
+    const nonceBytes = utf8ToBytes(String(nonce));
+    const encKey = new Uint8Array(
+      await subtle.digest("SHA-256", concatBytes(utf8ToBytes("sg-enc-v1:"), shared, nonceBytes, epkBytes))
+    );
+    const macKey = new Uint8Array(
+      await subtle.digest("SHA-256", concatBytes(utf8ToBytes("sg-mac-v1:"), shared, nonceBytes, epkBytes))
+    );
+
+    // 8-block SHA-256-CTR stream encryption
+    const ct = new Uint8Array(BLOCK_BYTES);
+    const ctrBuf = new Uint8Array(4);
+    for (let ctr = 0; ctr < BLOCK_BYTES / 32; ctr++) {
+      ctrBuf[0] = (ctr >>> 24) & 0xff;
+      ctrBuf[1] = (ctr >>> 16) & 0xff;
+      ctrBuf[2] = (ctr >>> 8) & 0xff;
+      ctrBuf[3] = ctr & 0xff;
+      const ks = new Uint8Array(await subtle.digest("SHA-256", concatBytes(encKey, ctrBuf)));
+      const base = ctr * 32;
+      for (let j = 0; j < 32; j++) {
+        ct[base + j] = block[base + j] ^ ks[j];
+      }
+    }
+
+    // Encrypt-then-MAC integrity tag binding nonce, expiry, ephemeral pubkey, and ciphertext
+    const macData = concatBytes(utf8ToBytes(String(nonce) + ":" + String(Number(exp)) + ":"), epkBytes, ct);
+    const tag = await hmacSha256Hex(macKey, macData);
+
+    // Zero sensitive buffers
+    block.fill(0);
+    shared.fill(0);
+    encKey.fill(0);
+    macKey.fill(0);
+
+    return {
+      epk: bytesToHex(epkBytes),
+      ct: bytesToHex(ct),
+      tag: tag,
+    };
+  }
+
+  /**
+   * Build one-time HMAC proof helper (retained for crypto verification tests).
    */
   async function createLoginProof(password, nonce, exp) {
     const pwdHash = sha3_512(password);
@@ -167,6 +282,7 @@
   return {
     sha3_512: sha3_512,
     hmacSha256Hex: hmacSha256Hex,
+    sealLoginEnvelope: sealLoginEnvelope,
     createLoginProof: createLoginProof,
   };
 });

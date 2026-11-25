@@ -59,25 +59,19 @@ SESSION_COOKIE_NAME = "sg_writings_session"
 LOCKOUT_COOKIE_NAME = "sg_writings_bf"
 SESSION_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
 CHALLENGE_TTL_SECONDS = 60  # One-time login challenge expires in 60 seconds
-MAX_JSON_BODY_BYTES = 5 * 1024 * 1024
-MAX_MEDIA_RAW_BYTES = 4_200_000  # Safely under Vercel's 4.5 MB serverless limit
+MAX_JSON_BODY_BYTES = 4_500_000
+MAX_MEDIA_RAW_BYTES = 3_000_000  # ~4.0 MB base64 JSON — safely under Vercel's 4.5 MB limit
 
 # Admin Geo-Blocker: China (CN), Israel (IL), Russia (RU), Iran (IR), India (IN)
 BLOCKED_ADMIN_COUNTRIES = frozenset({"CN", "IL", "RU", "IR", "IN"})
-BLOCKED_COUNTRY_NAMES = {
-    "CN": "China",
-    "IL": "Israel",
-    "RU": "Russia",
-    "IR": "Iran",
-    "IN": "India",
-}
 
 # Exponential anti-bruteforce lockout schedule (seconds per consecutive failed attempt)
 LOCKOUT_SCHEDULE_SECONDS = (5, 15, 30, 120, 300, 900)
 LOCKOUT_STATE_EXPIRY_SECONDS = 1800
 
-# Actions restricted to admin (subject to geo-blocker)
+# Actions restricted to admin (geo-blocked countries receive stealth HTTP 404)
 ADMIN_ACTIONS = frozenset({
+    "not_found",
     "geo_blocked",
     "challenge",
     "login",
@@ -224,26 +218,186 @@ def _prune_caches(now: int) -> None:
         _IP_LOCKOUT_STATE.pop(k, None)
 
 
+# ---------------------------------------------------------------------------
+# Pure-Python NIST P-256 ECDH + Encrypt-then-MAC Envelope (Zero Dependencies)
+# Prevents both plaintext exposure over the wire AND pass-the-hash attacks.
+# ---------------------------------------------------------------------------
+
+_P256_P = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF
+_P256_A = _P256_P - 3
+_P256_B = 0x5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B
+_P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+_P256_G = (
+    0x6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296,
+    0x4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5,
+)
+_ENVELOPE_BLOCK_BYTES = 256
+_SERVER_ECDH_CACHE: dict[bytes, tuple[int, str]] = {}
+
+
+def _p256_is_on_curve(pt: tuple[int, int] | None) -> bool:
+    if pt is None:
+        return False
+    x, y = pt
+    if not (0 <= x < _P256_P and 0 <= y < _P256_P):
+        return False
+    return (y * y - (x * x * x + _P256_A * x + _P256_B)) % _P256_P == 0
+
+
+def _p256_jac_double(pt: tuple[int, int, int]) -> tuple[int, int, int]:
+    x1, y1, z1 = pt
+    if y1 == 0 or z1 == 0:
+        return (0, 1, 0)
+    p = _P256_P
+    zz = (z1 * z1) % p
+    s = (4 * x1 * y1 * y1) % p
+    m = (3 * (x1 - zz) * (x1 + zz)) % p  # since a = -3 mod p
+    x3 = (m * m - 2 * s) % p
+    y3 = (m * (s - x3) - 8 * pow(y1, 4, p)) % p
+    z3 = (2 * y1 * z1) % p
+    return (x3, y3, z3)
+
+
+def _p256_jac_add(p1: tuple[int, int, int], p2: tuple[int, int, int]) -> tuple[int, int, int]:
+    x1, y1, z1 = p1
+    x2, y2, z2 = p2
+    if z1 == 0:
+        return p2
+    if z2 == 0:
+        return p1
+    p = _P256_P
+    z1z1 = (z1 * z1) % p
+    z2z2 = (z2 * z2) % p
+    u1 = (x1 * z2z2) % p
+    u2 = (x2 * z1z1) % p
+    s1 = (y1 * z2 * z2z2) % p
+    s2 = (y2 * z1 * z1z1) % p
+    if u1 == u2:
+        if s1 != s2:
+            return (0, 1, 0)
+        return _p256_jac_double(p1)
+    h = (u2 - u1) % p
+    r = (s2 - s1) % p
+    hh = (h * h) % p
+    hhh = (h * hh) % p
+    v = (u1 * hh) % p
+    x3 = (r * r - hhh - 2 * v) % p
+    y3 = (r * (v - x3) - s1 * hhh) % p
+    z3 = (h * z1 * z2) % p
+    return (x3, y3, z3)
+
+
+def _p256_scalar_mult(k: int, affine_pt: tuple[int, int]) -> tuple[int, int] | None:
+    k = k % _P256_N
+    if k == 0:
+        return None
+    result = (0, 1, 0)
+    addend = (affine_pt[0], affine_pt[1], 1)
+    while k:
+        if k & 1:
+            result = _p256_jac_add(result, addend)
+        addend = _p256_jac_double(addend)
+        k >>= 1
+    x, y, z = result
+    if z == 0:
+        return None
+    z_inv = pow(z, _P256_P - 2, _P256_P)
+    z_inv2 = (z_inv * z_inv) % _P256_P
+    z_inv3 = (z_inv2 * z_inv) % _P256_P
+    return ((x * z_inv2) % _P256_P, (y * z_inv3) % _P256_P)
+
+
+def _p256_decode_uncompressed(pub_hex: str) -> tuple[int, int] | None:
+    if not isinstance(pub_hex, str) or len(pub_hex) != 130:
+        return None
+    try:
+        raw = bytes.fromhex(pub_hex)
+    except ValueError:
+        return None
+    if len(raw) != 65 or raw[0] != 0x04:
+        return None
+    x = int.from_bytes(raw[1:33], "big")
+    y = int.from_bytes(raw[33:65], "big")
+    pt = (x, y)
+    return pt if _p256_is_on_curve(pt) else None
+
+
+def get_server_ecdh_keypair() -> tuple[int, str]:
+    secret = _session_secret()
+    cached = _SERVER_ECDH_CACHE.get(secret)
+    if cached is not None:
+        return cached
+    d_bytes = hmac.new(secret, b"sg-writings-ecdh-p256-v1", hashlib.sha256).digest()
+    d = (int.from_bytes(d_bytes, "big") % (_P256_N - 1)) + 1
+    pub_pt = _p256_scalar_mult(d, _P256_G)
+    if pub_pt is None:
+        raise RuntimeError("Failed to derive server ECDH public key.")
+    pub_hex = (b"\x04" + pub_pt[0].to_bytes(32, "big") + pub_pt[1].to_bytes(32, "big")).hex()
+    _SERVER_ECDH_CACHE.clear()
+    _SERVER_ECDH_CACHE[secret] = (d, pub_hex)
+    return d, pub_hex
+
+
+def _derive_envelope_keys(shared: bytes, nonce: str, epk_bytes: bytes) -> tuple[bytes, bytes]:
+    nonce_b = nonce.encode("ascii")
+    enc_key = hashlib.sha256(b"sg-enc-v1:" + shared + nonce_b + epk_bytes).digest()
+    mac_key = hashlib.sha256(b"sg-mac-v1:" + shared + nonce_b + epk_bytes).digest()
+    return enc_key, mac_key
+
+
+def _envelope_xor_stream(enc_key: bytes, data: bytes) -> bytes:
+    out = bytearray(len(data))
+    blocks = (len(data) + 31) // 32
+    ks = bytearray()
+    for ctr in range(blocks):
+        ks.extend(hashlib.sha256(enc_key + ctr.to_bytes(4, "big")).digest())
+    for i, b in enumerate(data):
+        out[i] = b ^ ks[i]
+    return bytes(out)
+
+
+def seal_login_envelope_py(password: str, nonce: str, exp: int, server_pub_hex: str) -> dict:
+    """Reference Python implementation matching browser Web Crypto sealLoginEnvelope (for tests)."""
+    server_pt = _p256_decode_uncompressed(server_pub_hex)
+    if server_pt is None:
+        raise ValueError("Invalid server P-256 public key.")
+    eph_d = (secrets.randbelow(_P256_N - 1)) + 1
+    eph_pt = _p256_scalar_mult(eph_d, _P256_G)
+    shared_pt = _p256_scalar_mult(eph_d, server_pt)
+    if eph_pt is None or shared_pt is None:
+        raise RuntimeError("ECDH derivation failed.")
+    epk_bytes = b"\x04" + eph_pt[0].to_bytes(32, "big") + eph_pt[1].to_bytes(32, "big")
+    shared = shared_pt[0].to_bytes(32, "big")
+
+    msg = json.dumps({"n": nonce, "e": int(exp), "p": password}, separators=(",", ":")).encode("utf-8")
+    if len(msg) > _ENVELOPE_BLOCK_BYTES - 2:
+        raise ValueError("Password payload too long.")
+    pad_len = _ENVELOPE_BLOCK_BYTES - 2 - len(msg)
+    block = len(msg).to_bytes(2, "big") + msg + secrets.token_bytes(pad_len)
+
+    enc_key, mac_key = _derive_envelope_keys(shared, nonce, epk_bytes)
+    ct = _envelope_xor_stream(enc_key, block)
+    tag = hmac.new(mac_key, f"{nonce}:{int(exp)}:".encode("ascii") + epk_bytes + ct, hashlib.sha256).hexdigest()
+    return {"epk": epk_bytes.hex(), "ct": ct.hex(), "tag": tag}
+
+
 def create_login_challenge(now: int | None = None) -> dict:
     ts = int(time.time()) if now is None else int(now)
     nonce = secrets.token_hex(32)
     exp = ts + CHALLENGE_TTL_SECONDS
-    msg = f"challenge:{nonce}:{exp}".encode("ascii")
+    _, pub_hex = get_server_ecdh_keypair()
+    msg = f"challenge:{nonce}:{exp}:{pub_hex}".encode("ascii")
     sig = hmac.new(_session_secret(), msg, hashlib.sha256).hexdigest()
-    return {"nonce": nonce, "exp": exp, "sig": sig}
+    return {"nonce": nonce, "exp": exp, "pub": pub_hex, "sig": sig}
 
 
-def compute_expected_login_proof(nonce: str, exp: int, expected_sha3_512: str | None = None) -> str:
-    key_hex = (expected_sha3_512 or get_expected_password_hash()).strip().lower()
-    msg = f"{nonce}:{exp}".encode("ascii")
-    return hmac.new(key_hex.encode("ascii"), msg, hashlib.sha256).hexdigest()
-
-
-def verify_login_challenge_proof(
+def verify_login_envelope(
     nonce: str,
     exp: int,
     sig: str,
-    proof: str,
+    epk_hex: str,
+    ct_hex: str,
+    tag_hex: str,
     *,
     now: int | None = None,
     consume_nonce: bool = True,
@@ -260,9 +414,10 @@ def verify_login_challenge_proof(
     if ts > exp_int or exp_int > ts + CHALLENGE_TTL_SECONDS + 10:
         return False, "Login challenge expired. Please try again."
 
+    server_d, server_pub_hex = get_server_ecdh_keypair()
     expected_sig = hmac.new(
         _session_secret(),
-        f"challenge:{nonce}:{exp_int}".encode("ascii"),
+        f"challenge:{nonce}:{exp_int}:{server_pub_hex}".encode("ascii"),
         hashlib.sha256,
     ).hexdigest()
     if not isinstance(sig, str) or not hmac.compare_digest(sig.lower(), expected_sig):
@@ -273,10 +428,55 @@ def verify_login_challenge_proof(
     if consume_nonce:
         _USED_NONCES[nonce] = exp_int + 10
 
-    if not isinstance(proof, str) or len(proof) != 64:
-        return False, "Incorrect password."
-    expected_proof = compute_expected_login_proof(nonce, exp_int)
-    if not hmac.compare_digest(proof.lower(), expected_proof):
+    client_pt = _p256_decode_uncompressed(epk_hex)
+    if client_pt is None:
+        return False, "Invalid encrypted login envelope."
+    if not isinstance(ct_hex, str) or len(ct_hex) != _ENVELOPE_BLOCK_BYTES * 2:
+        return False, "Invalid encrypted login envelope."
+    if not isinstance(tag_hex, str) or len(tag_hex) != 64:
+        return False, "Invalid encrypted login envelope."
+    try:
+        epk_bytes = bytes.fromhex(epk_hex)
+        ct_bytes = bytes.fromhex(ct_hex)
+    except ValueError:
+        return False, "Invalid encrypted login envelope."
+
+    shared_pt = _p256_scalar_mult(server_d, client_pt)
+    if shared_pt is None:
+        return False, "Invalid encrypted login envelope."
+    shared = shared_pt[0].to_bytes(32, "big")
+
+    enc_key, mac_key = _derive_envelope_keys(shared, nonce, epk_bytes)
+    expected_tag = hmac.new(
+        mac_key,
+        f"{nonce}:{exp_int}:".encode("ascii") + epk_bytes + ct_bytes,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(tag_hex.lower(), expected_tag):
+        return False, "Encrypted login integrity check failed."
+
+    block = _envelope_xor_stream(enc_key, ct_bytes)
+    msg_len = int.from_bytes(block[:2], "big")
+    if msg_len == 0 or msg_len > _ENVELOPE_BLOCK_BYTES - 2:
+        return False, "Malformed encrypted login payload."
+
+    try:
+        payload = json.loads(block[2:2 + msg_len].decode("utf-8"))
+    except Exception:
+        return False, "Malformed encrypted login payload."
+
+    if not isinstance(payload, dict):
+        return False, "Malformed encrypted login payload."
+    inner_nonce = str(payload.get("n") or "")
+    try:
+        inner_exp = int(payload.get("e") or 0)
+    except Exception:
+        inner_exp = 0
+    if not hmac.compare_digest(inner_nonce, nonce) or inner_exp != exp_int:
+        return False, "Login challenge mismatch."
+
+    pwd = payload.get("p")
+    if not verify_password(pwd if isinstance(pwd, str) else ""):
         return False, "Incorrect password."
     return True, "ok"
 
@@ -537,34 +737,44 @@ def github_get_file(rel_path: str, token: str = "") -> tuple[bytes | None, str |
         sha = data.get("sha")
         if data.get("encoding") == "base64" and data.get("content"):
             return base64.b64decode(data["content"]), sha
-        if data.get("download_url"):
-            req = urllib.request.Request(
-                data["download_url"],
-                headers={"User-Agent": "SaintGordon-Writings-CMS/1.0", **({"Authorization": f"Bearer {token}"} if token else {})},
-            )
-            with urllib.request.urlopen(req, timeout=12) as resp:
-                return resp.read(), sha
+        # For files > 1 MB, fetch raw bytes straight from GitHub API (avoids raw.githubusercontent.com CDN lag)
+        raw_url = f"https://api.github.com/repos/{repo}/contents/{quoted}?ref={urllib.parse.quote(branch)}"
+        raw_headers = {
+            "Accept": "application/vnd.github.raw+json",
+            "User-Agent": "SaintGordon-Writings-CMS/1.0",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        if token:
+            raw_headers["Authorization"] = f"Bearer {token}"
+        req = urllib.request.Request(raw_url, headers=raw_headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.read(), sha
     return None, None
 
 
 def github_put_file(rel_path: str, content_bytes: bytes, message: str, token: str, sha: str | None = None) -> dict:
     repo, branch = get_repo_config()
-    if sha is None:
-        _, existing_sha = github_get_file(rel_path, token=token)
-        sha = existing_sha
-    payload: dict = {
-        "message": message,
-        "content": base64.b64encode(content_bytes).decode("ascii"),
-        "branch": branch,
-    }
-    if sha:
-        payload["sha"] = sha
     quoted = urllib.parse.quote(rel_path, safe="/")
-    status, data = _github_request("PUT", f"/repos/{repo}/contents/{quoted}", token=token, payload=payload)
-    if status not in (200, 201):
+    cur_sha = sha
+    for attempt in range(2):
+        if cur_sha is None:
+            _, cur_sha = github_get_file(rel_path, token=token)
+        payload: dict = {
+            "message": message,
+            "content": base64.b64encode(content_bytes).decode("ascii"),
+            "branch": branch,
+        }
+        if cur_sha:
+            payload["sha"] = cur_sha
+        status, data = _github_request("PUT", f"/repos/{repo}/contents/{quoted}", token=token, payload=payload)
+        if status in (200, 201):
+            return data if isinstance(data, dict) else {}
+        if status == 409 and attempt == 0:
+            cur_sha = None
+            continue
         msg = data.get("message") if isinstance(data, dict) else f"GitHub HTTP {status}"
         raise RuntimeError(f"GitHub write failed ({status}): {msg}")
-    return data if isinstance(data, dict) else {}
+    raise RuntimeError("GitHub write failed after retry.")
 
 
 def github_delete_file(rel_path: str, message: str, token: str) -> bool:
@@ -760,21 +970,21 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def _send_geo_blocked_html(self):
+    def _send_not_found_html(self):
         html = (
             "<!doctype html><html lang='en'><head><meta charset='utf-8'/>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'/>"
             "<meta name='robots' content='noindex,nofollow'/>"
-            "<title>403 — Access Restricted | Saint Gordon Collective</title>"
+            "<title>404 — Page Not Found | Saint Gordon Collective</title>"
             "<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f2f2f2;color:#101010;"
             "font-family:'Courier New',monospace;padding:24px;}main{max-width:520px;background:#fff;border:1px solid #101010;"
-            "padding:36px;box-shadow:7px 7px 0 #101010;}h1{font-family:Georgia,serif;margin:12px 0 10px;font-size:28px;}"
-            "p{font-family:Arial,sans-serif;line-height:1.6;color:#303030;}a{color:#101010;}</style></head>"
-            "<body><main><div>HTTP 403 // REGION RESTRICTED</div><h1>Admin Access Unavailable</h1>"
-            "<p>The Saint Gordon Writings admin portal is not accessible from your region.</p>"
-            "<p><a href='/writings'>← Return to Public Writings</a></p></main></body></html>"
+            "padding:36px;box-shadow:7px 7px 0 #101010;}h1{font-family:Georgia,serif;margin:12px 0 10px;font-size:30px;}"
+            "p{font-family:Arial,sans-serif;line-height:1.6;color:#303030;}a{color:#101010;font-weight:700;}</style></head>"
+            "<body><main><div>HTTP 404 // NOT FOUND</div><h1>Page Not Found.</h1>"
+            "<p>The page you are looking for does not exist or has been moved.</p>"
+            "<p><a href='/'>← Return Home</a></p></main></body></html>"
         ).encode("utf-8")
-        self.send_response(403)
+        self.send_response(404)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Frame-Options", "DENY")
@@ -803,12 +1013,12 @@ class handler(BaseHTTPRequestHandler):
         params = urllib.parse.parse_qs(parsed_url.query)
         action = (params.get("action", ["list"])[0] or "list").strip().lower()
 
-        if action == "geo_blocked":
-            self._send_geo_blocked_html()
+        if action in ("not_found", "geo_blocked"):
+            self._send_not_found_html()
             return
 
         if action in ADMIN_ACTIONS and self._is_geo_blocked():
-            self._send_json(403, {"error": "Admin access is restricted in your region.", "code": "GEO_BLOCKED"})
+            self._send_json(404, {"error": "Not found."})
             return
 
         is_admin = self._is_authenticated()
@@ -912,9 +1122,9 @@ class handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self):
-        # All POST actions are admin actions — enforce geo-blocker first before reading body
+        # All POST actions are admin actions — stealth 404 for geo-blocked regions
         if self._is_geo_blocked():
-            self._send_json(403, {"error": "Admin access is restricted in your region.", "code": "GEO_BLOCKED"})
+            self._send_json(404, {"error": "Not found."})
             return
 
         try:
@@ -943,7 +1153,7 @@ class handler(BaseHTTPRequestHandler):
                 )
                 return
 
-            # Reject plaintext password transmission — enforce zero-plaintext challenge-response
+            # Reject plaintext password transmission — enforce E2E encrypted login envelope
             if "password" in body:
                 self._send_json(
                     400,
@@ -951,11 +1161,13 @@ class handler(BaseHTTPRequestHandler):
                 )
                 return
 
-            ok, err_msg = verify_login_challenge_proof(
+            ok, err_msg = verify_login_envelope(
                 str(body.get("nonce") or ""),
                 body.get("exp"),
                 str(body.get("sig") or ""),
-                str(body.get("proof") or ""),
+                str(body.get("epk") or ""),
+                str(body.get("ct") or ""),
+                str(body.get("tag") or ""),
             )
             if not ok:
                 new_fails, _, timeout_sec, bf_val = record_failed_login(ip_key, lockout_ck)
@@ -1223,7 +1435,7 @@ class handler(BaseHTTPRequestHandler):
         except Exception:
             raise ValueError("Invalid base64 media payload.")
         if len(raw_bytes) > MAX_MEDIA_RAW_BYTES:
-            raise ValueError("File exceeds 4.2 MB upload limit. Compress image or embed larger videos via YouTube/Vimeo.")
+            raise ValueError("File exceeds 3 MB upload limit. Compress image or embed larger videos via YouTube/Vimeo.")
 
         safe_name = sanitize_filename(raw_name)
         rel_path = f"{MEDIA_DIR_REL}/{safe_name}"

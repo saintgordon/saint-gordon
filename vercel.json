@@ -10,7 +10,7 @@
           "value": "^(CN|IL|RU|IR|IN)$"
         }
       ],
-      "destination": "/api/writings?action=geo_blocked"
+      "destination": "/api/writings?action=not_found"
     },
     {
       "source": "/admin.html",
@@ -21,7 +21,7 @@
           "value": "^(CN|IL|RU|IR|IN)$"
         }
       ],
-      "destination": "/api/writings?action=geo_blocked"
+      "destination": "/api/writings?action=not_found"
     }
   ],
   "headers": [

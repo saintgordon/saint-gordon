@@ -173,7 +173,7 @@
     "error",
     (event) => {
       const image = event.target;
-      if (image.tagName !== "IMG" || image.dataset.fallbackUsed) return;
+      if (image.tagName !== "IMG" || image.dataset.fallbackUsed || image.dataset.fallbackSrc) return;
       image.dataset.fallbackUsed = "true";
       image.src = "assets/artwork/cover-placeholder.svg";
       image.alt = "Cover art to follow";

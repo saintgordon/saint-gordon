@@ -49,7 +49,8 @@ test("auto-embeds YouTube, Vimeo, SoundCloud, direct video, and local media fall
   assert.match(html, /player\.vimeo\.com\/video\/123456789/);
   assert.match(html, /w\.soundcloud\.com\/player/);
   assert.match(html, /<video class="writing-video"/);
-  assert.match(html, /data-fallback-src="\/api\/writings\?action=media&amp;file=photo\.jpg"/);
+  assert.match(html, /src="\/api\/writings\?action=media&amp;file=photo\.jpg"/);
+  assert.match(html, /data-fallback-src="writings\/media\/photo\.jpg"/);
 });
 
 test("slugify, stripMarkdown, and reading time work cleanly", () => {
@@ -70,4 +71,43 @@ test("pure-JS FIPS 202 SHA3-512 and zero-plaintext login proof match Node OpenSS
   const pwdHash = crypto.createHash("sha3-512").update("test-passphrase", "utf8").digest("hex");
   const expectedProof = crypto.createHmac("sha256", pwdHash).update(`${nonce}:${exp}`).digest("hex");
   assert.equal(proof, expectedProof);
+});
+
+test("Web Crypto ECDH P-256 sealLoginEnvelope interoperates with Python api/writings.py", async () => {
+  const { execFileSync } = require("node:child_process");
+  const path = require("node:path");
+  const root = path.resolve(__dirname, "..");
+  const testPwd = "CrossLang-ECDH-P256-Test!🎵";
+
+  // 1. Ask Python api/writings.py to mint a real P-256 challenge
+  const pyChallenge = JSON.parse(
+    execFileSync("python3", [
+      "-c",
+      `import json, os, sys; sys.path.insert(0, ${JSON.stringify(root)}); from api import writings; ` +
+      `os.environ["GITHUB_TOKEN"]="test_secret_interop"; ` +
+      `os.environ["WRITINGS_PASSWORD_HASH"]=writings.compute_sha3_512(${JSON.stringify(testPwd)}); ` +
+      `print(json.dumps(writings.create_login_challenge(now=1750000000)))`,
+    ], { encoding: "utf8" })
+  );
+
+  // 2. Seal envelope in JS using real Web Crypto ECDH P-256
+  const env = await SaintCrypto.sealLoginEnvelope(testPwd, pyChallenge.nonce, pyChallenge.exp, pyChallenge.pub);
+  assert.equal(env.epk.length, 130);
+  assert.equal(env.ct.length, 512);
+  assert.equal(env.tag.length, 64);
+  assert.equal(JSON.stringify(env).includes(testPwd), false);
+
+  // 3. Ask Python api/writings.py to decrypt & verify JS-sealed envelope
+  const pyVerify = JSON.parse(
+    execFileSync("python3", [
+      "-c",
+      `import json, os, sys; sys.path.insert(0, ${JSON.stringify(root)}); from api import writings; ` +
+      `os.environ["GITHUB_TOKEN"]="test_secret_interop"; ` +
+      `os.environ["WRITINGS_PASSWORD_HASH"]=writings.compute_sha3_512(${JSON.stringify(testPwd)}); ` +
+      `ch=${JSON.stringify(pyChallenge)}; env=${JSON.stringify(env)}; ` +
+      `ok, msg = writings.verify_login_envelope(ch["nonce"], ch["exp"], ch["sig"], env["epk"], env["ct"], env["tag"], now=1750000005); ` +
+      `print(json.dumps({"ok": ok, "msg": msg}))`,
+    ], { encoding: "utf8" })
+  );
+  assert.equal(pyVerify.ok, true, pyVerify.msg);
 });

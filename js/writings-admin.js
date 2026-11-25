@@ -245,15 +245,16 @@
     state.lockoutTimer = setInterval(tick, 250);
   }
 
-  function showGeoBlockedScreen() {
+  function showNotFoundScreen() {
     clearLockoutCountdown();
+    document.title = "404 — Page Not Found | Saint Gordon Collective";
     dom.dashboard.classList.add("hidden");
     dom.lockScreen.classList.remove("hidden");
     dom.lockScreen.innerHTML =
-      '<div class="admin-lock-head micro"><span>HTTP 403 // REGION RESTRICTED</span><span>GEO-BLOCKED</span></div>' +
-      '<h1 class="admin-lock-title">Access Restricted.</h1>' +
-      '<p class="admin-lock-sub">The Saint Gordon Writings admin portal is not accessible from your region.</p>' +
-      '<a class="admin-lock-btn" style="display:block;text-align:center;text-decoration:none;" href="writings.html">← Return to Writings</a>';
+      '<div class="admin-lock-head micro"><span>HTTP 404 // NOT FOUND</span><span>SAINT GORDON</span></div>' +
+      '<h1 class="admin-lock-title">Page Not Found.</h1>' +
+      '<p class="admin-lock-sub">The page you are looking for does not exist or has been moved.</p>' +
+      '<a class="admin-lock-btn" style="display:block;text-align:center;text-decoration:none;" href="/">← Return Home</a>';
   }
 
   async function checkSession() {
@@ -265,8 +266,8 @@
         startLockoutCountdown(data.retryAfter, "Anti-bruteforce timeout active.");
       }
     } catch (err) {
-      if (err && (err.status === 403 || err.code === "GEO_BLOCKED")) {
-        showGeoBlockedScreen();
+      if (err && (err.status === 404 || err.status === 403 || err.code === "GEO_BLOCKED")) {
+        showNotFoundScreen();
         return;
       }
       state.authenticated = false;
@@ -294,7 +295,7 @@
     if (state.lockoutUntilMs > Date.now()) return;
     const pwd = dom.passwordInput.value;
     if (!pwd) return;
-    if (!CRYPTO || typeof CRYPTO.createLoginProof !== "function") {
+    if (!CRYPTO || typeof CRYPTO.sealLoginEnvelope !== "function") {
       dom.loginError.textContent = "Crypto module failed to load. Refresh over HTTPS and try again.";
       dom.loginError.classList.remove("hidden");
       return;
@@ -307,25 +308,27 @@
     dom.loginError.classList.add("hidden");
 
     try {
-      // Step 1: Fetch single-use signed server challenge (never send plaintext password)
+      // Step 1: Fetch single-use signed server challenge + P-256 public key
       const challenge = await apiGet("action=challenge");
-      // Step 2: Compute SHA3-512 locally + one-time HMAC-SHA256 proof bound to nonce
-      const proof = await CRYPTO.createLoginProof(pwd, challenge.nonce, challenge.exp);
-      // Step 3: Send ONLY the one-time proof (zero plaintext & zero static hash over the wire)
+      // Step 2: End-to-end encrypt password inside ephemeral ECDH P-256 + Encrypt-then-MAC envelope
+      const envelope = await CRYPTO.sealLoginEnvelope(pwd, challenge.nonce, challenge.exp, challenge.pub);
+      // Step 3: Send ONLY the one-time encrypted envelope (zero plaintext & zero static hash over the wire)
       const res = await apiPost({
         action: "login",
         nonce: challenge.nonce,
         exp: challenge.exp,
         sig: challenge.sig,
-        proof: proof,
+        epk: envelope.epk,
+        ct: envelope.ct,
+        tag: envelope.tag,
       });
       state.authenticated = true;
       state.cloudConfigured = Boolean(res.cloudConfigured);
       await enterDashboard();
       showToast("Unlocked Saint Gordon Writings Admin");
     } catch (err) {
-      if (err && (err.status === 403 || err.code === "GEO_BLOCKED")) {
-        showGeoBlockedScreen();
+      if (err && (err.status === 404 || err.status === 403 || err.code === "GEO_BLOCKED")) {
+        showNotFoundScreen();
         return;
       }
       if (err && (err.status === 429 || Number(err.retryAfter || 0) > 0)) {
@@ -545,7 +548,7 @@
     const raw = dom.edCover.value.trim();
     const media = MD.resolveMediaSrc(raw);
     if (media.primary) {
-      dom.edCoverPreview.src = media.fallback || media.primary;
+      dom.edCoverPreview.src = media.primary;
       dom.edCoverPreview.classList.remove("hidden");
       dom.btnClearCover.classList.remove("hidden");
     } else {
@@ -639,10 +642,12 @@
   });
 
   [dom.edDate, dom.edTags, dom.edStatus, dom.edPinned, dom.edSummary, dom.edBody].forEach(function (el) {
-    el.addEventListener("input", function () {
+    const sync = function () {
       updatePreviewAndStats();
       saveLocalAutosave();
-    });
+    };
+    el.addEventListener("input", sync);
+    el.addEventListener("change", sync);
   });
 
   dom.edCover.addEventListener("input", function () {
@@ -854,6 +859,8 @@
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
 
       if (xerox) {
@@ -890,8 +897,19 @@
   }
 
   async function uploadSingleFile(file, opts) {
+    if (!hasWriteCapability()) {
+      switchTab("setup");
+      showToast("Connect GITHUB_TOKEN first to upload media", 3400);
+      return null;
+    }
     showToast("Uploading " + file.name + "…", 4000);
-    const prepared = await processImageBeforeUpload(file, opts || { compress: true, xerox: false });
+    let prepared;
+    try {
+      prepared = await processImageBeforeUpload(file, opts || { compress: true, xerox: false });
+    } catch (err) {
+      showToast((err && err.message) || "Could not process file for upload", 3800);
+      return null;
+    }
     const res = await runWriteAction(function () {
       return apiPost({
         action: "upload_media",
@@ -984,8 +1002,8 @@
     const file = dom.embedVideoFile.files && dom.embedVideoFile.files[0];
     dom.embedVideoFile.value = "";
     if (!file) return;
-    if (file.size > 4_100_000) {
-      showToast("Clip is over 4 MB — upload to YouTube/Vimeo and paste the link instead!", 4200);
+    if (file.size > 3_000_000) {
+      showToast("Clip is over 3 MB — upload to YouTube/Vimeo and paste the link instead!", 4200);
       return;
     }
     dom.embedModal.classList.add("hidden");

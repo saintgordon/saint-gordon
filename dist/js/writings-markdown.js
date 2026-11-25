@@ -38,8 +38,8 @@
     if (mediaMatch) {
       const file = encodeURIComponent(mediaMatch[1]);
       return {
-        primary: safe,
-        fallback: "/api/writings?action=media&file=" + file,
+        primary: "/api/writings?action=media&file=" + file,
+        fallback: safe,
       };
     }
     return { primary: safe, fallback: "" };
@@ -421,13 +421,17 @@
   function attachMediaFallbacks(container) {
     if (!container) return;
     container.querySelectorAll("img[data-fallback-src]").forEach(function (img) {
-      img.addEventListener("error", function onErr() {
+      const swapToFallback = function () {
         const fb = img.getAttribute("data-fallback-src");
         if (fb && img.getAttribute("src") !== fb) {
           img.removeAttribute("data-fallback-src");
           img.setAttribute("src", fb);
         }
-      });
+      };
+      img.addEventListener("error", swapToFallback);
+      if (img.complete && img.naturalWidth === 0) {
+        swapToFallback();
+      }
     });
   }
 
