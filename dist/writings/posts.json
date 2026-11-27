@@ -1,5 +1,59 @@
 [
   {
+    "slug": "how-to-mix-vocal-doubles-like-a-pro",
+    "title": "How to Mix Vocal Doubles Like a Pro",
+    "date": "2026-11-28",
+    "updatedAt": "2026-11-28T05:17:00Z",
+    "status": "published",
+    "pinned": false,
+    "tags": [
+      "Mixing",
+      "Studio",
+      "Notes"
+    ],
+    "summary": "Why copying a track ruins mono phase, how to trim consonants and filter out low mud on panned doubles, and why rhythm decides which vocal bus shares compression.",
+    "coverImage": "",
+    "readingTimeMin": 2,
+    "wordCount": 501,
+    "searchText": "Great vocal doubles wrap around a lead like a wide frame without ever sounding messy or distracting. Yet copying your lead track onto two panned channels doesn’t add width at all: identical audio panned equally left and right collapses straight back into louder mono, and sliding a duplicate by a few milliseconds triggers hollow comb filtering the moment anyone listens on a phone speaker. Never duplicate a lead statically. Record separate takes, trim the consonants, carve room with EQ, and tuck them underneath. 1. Record Real Doubles & Lock Phrase Endings Two genuine takes naturally carry subtle micro differences in pitch, vibrato, and timing that fool the ear into wide stereo depth without collapsing in mono. (If you are stuck with one single track, reach for subtle micro pitch shifting of 5 to 10 cents or wide slapback delay, and check your mono sum constantly.) Decide how tight the track needs to feel, then edit word endings and cutoffs first. If the lead snaps a syllable shut cleanly while a double lingers behind, the whole chorus feels sloppy. 2. Tame Consonants & De Ess Harder Than the Lead Sharp \"T\", \"P\", \"K\", and \"S\" bursts on wide left and right tracks tear at listeners’ ears whenever two takes miss by a fraction of a second. Pull down harsh consonant spikes with clip gain, then run a dedicated de esser on your doubles before compression so only the centred lead vocal carries primary sibilance. Stereo and frequency layout showing centred lead vocal versus wide filtered, de essed doubles and rhythm bus routing 3. Sculpt Doubles Around the Lead Never paste your lead vocal EQ straight onto your doubles: High Pass Higher (150 to 300 Hz): Strip low end mud and chest weight out of the sides (80 to 100 Hz belongs strictly to the centre lead). Gentle Top Roll Off (10 to 14 kHz) & Mid Dip: Shave off extreme top air and try a 1 to 3 dB dip in the 1 to 3 kHz vocal presence zone so doubles wrap behind the lead instead of fighting it. Light tape or tube saturation also thickens doubles smoothly. 4. Compress, Pan Symmetrically & Group by Rhythm Compress doubles slightly harder and steadier (LA2A or slower attack with fast release) so stereo sides never poke unpredictably over the lead. Route unison doubles that sing the exact same rhythm as the lead into a shared vocal bus or shared parallel compressor to glue them together, while keeping rhythmically different ba"
+  },
+  {
+    "slug": "how-to-record-clean-vocals-at-home",
+    "title": "How to Record Clean Vocals at Home",
+    "date": "2026-11-28",
+    "updatedAt": "2026-11-28T05:16:00Z",
+    "status": "published",
+    "pinned": false,
+    "tags": [
+      "Studio",
+      "Notes",
+      "Mixing"
+    ],
+    "summary": "How to stop bedroom comb filtering, when recording under a blanket works versus when it turns boxy, and why keeping chorus peaks around -10 dBFS saves every take.",
+    "coverImage": "",
+    "readingTimeMin": 3,
+    "wordCount": 534,
+    "searchText": "Most messy bedroom vocals fail before a single plugin ever loads. Sing near a bare bedroom wall and your voice hits the plaster, bounces back milliseconds late into the mic, and collides with the direct sound. That overlap creates comb filtering : a hollow, boxy tunnel tone that no EQ can truly rescue later. Treat the first reflection behind you, reject room noise at the mic’s rear null, and keep peaks around 10 dBFS. Room Treatment & The Blanket Trick Cheap thin pyramid foam (under 1 inch) only absorbs top end sizzle while low mid waves bounce straight through it, leaving vocals dull and boomy. For real absorption on a budget: Blankets & Recording Under a Duvet: Throwing a heavy duvet over your head kills bright wall slap immediately in an emergency, but pulling thin fabric tightly around a tiny space traps boxy 200 to 500 Hz low mids because cloth cannot stop longer bass waves. Give yourself air inside instead of suffocating right on the capsule, or better yet, hang the thickest duvet or quilt you own behind you with a 2 to 3 inch gap off the wall so low mids dissipate. Use Your Cardioid Null: A cardioid mic rejects sound most strongly at 180 degrees behind the capsule. Aim the back of the mic at your computer fan or bare wall, put your heavy blanket or open coat wardrobe behind you , and sing straight toward the dead room behind the mic. Long Term Fix: Timber framed DIY Rockwool panels cost a fraction of studio brand foam and genuinely absorb down into the low mids. Floorplan showing thick duvet absorption behind the vocalist, 15 to 30 cm mic placement, cardioid null rejection, and 10 dBFS Pre Fader target Mic, Pop Filter & Headphones Pick the Mic for the Room: In an untreated bedroom, a dynamic mic (Shure SM57, SM58, or SM7B) rejects distant room bounce far better than a sensitive condenser (Audio Technica AT2020, Rode NT1). Only switch to a +48V condenser when your space is controlled. Distance & Plosives: Stay 15 to 30 cm off the capsule behind a pop filter . Getting closer adds low end proximity warmth, so keep your head steady during loud lines. Closed Back Cans Only: Track in closed back headphones (Sony MDR7506, Sennheiser HD280, Beyerdynamic DT770 Pro). Open back mixing headphones like HD600s leak metronome clicks straight onto vocal stems. Pre Fader Gain Staging ( 10 dBFS Rule) 1. Set Metering to Pre Fader: Keep DAW meters on Pre Fader while trac"
+  },
+  {
+    "slug": "the-pultec-low-end-trick",
+    "title": "The Pultec Low End Trick",
+    "date": "2026-11-28",
+    "updatedAt": "2026-11-28T05:15:00Z",
+    "status": "published",
+    "pinned": false,
+    "tags": [
+      "Mixing",
+      "Mastering",
+      "Notes"
+    ],
+    "summary": "Why boosting and attenuating the same frequency on a passive Pultec EQP1A adds deep sub weight while scooping out low mid mud.",
+    "coverImage": "",
+    "readingTimeMin": 2,
+    "wordCount": 410,
+    "searchText": "Try boosting and cutting the same frequency on a standard digital EQ and the two moves cancel out flat. Try it on a Pultec EQP1A (or Logic’s built in Vintage Tube EQ and the UAD Pultec Passive EQ Collection ) and you get massive sub weight alongside a cleaner midrange. Boost the sub fundamental. Let the attenuation scoop the mud sitting right above it. Why It Doesn’t Cancel Out Unlike active digital EQs, the original Pultec EQP1A shapes tone with a passive network of inductors, capacitors, and resistors. Passive components cannot amplify anything on their own. They drop the whole signal by roughly 20 dB of insertion loss, then pass it through a vacuum tube makeup stage that brings the level back up with subtle transformer warmth. Even though a single frequency switch (20, 30, 60, or 100 Hz) controls the low band, Boost and Attenuate run through two separate internal filter curves: Low Boost: Acts as a very broad low shelf that lifts sub frequencies while spilling upward into the low mids (100 to 300 Hz). Low Attenuate: Uses a different filter slope whose turnover frequency sits roughly half an octave to a full octave higher up. When you turn both knobs up together, the boost holds up the deep bottom end while the higher attenuation curve carves a dip right through the boxy low mids sitting above it. Frequency response showing the Pultec boost shelf, higher attenuation turnover, and resulting low mid mud scoop Starting Settings by Instrument Ignore the 0 to 10 scale printed around Pultec dials. Those markings are not calibrated in decibels, so trust your ears first: 1. Vocals (100 Hz Band): Start on 100 Hz with Boost around 4 and Atten around 6 to add chest weight without clouding the mix, then open 12 kHz high end air ( Q around 8 , Boost around 2 ). 2. Bass Guitar (100 Hz Band): Set 100 Hz with Boost around 5 and Atten around 6 , tweaking until low notes stay fat without masking the kick. 3. Kick Drum & Master Bus (20, 30, or 60 Hz): Pick 20 or 30 Hz for deep sub punch on kick drums (200 to 400 Hz dip), or 60 Hz on a full mix (Boost 3 to 4, Atten 3 to 4) after bus compression, paired with 10, 12, or 16 kHz for subtle top sheen. Adapted in part from Island Recording Studios’ Home Recording Bootcamp mixing guides."
+  },
+  {
     "slug": "analogue-vs-digital-eq-cut-with-a-scalpel-boost-with-iron",
     "title": "Analogue vs Digital EQ: Cut With a Scalpel, Boost With Iron",
     "date": "2026-11-27",
