@@ -1,5 +1,131 @@
 [
   {
+    "slug": "analogue-vs-digital-eq-cut-with-a-scalpel-boost-with-iron",
+    "title": "Analogue vs Digital EQ: Cut With a Scalpel, Boost With Iron",
+    "date": "2026-11-27",
+    "updatedAt": "2026-11-27T07:21:00Z",
+    "status": "published",
+    "pinned": false,
+    "tags": [
+      "Mixing",
+      "Studio",
+      "Notes"
+    ],
+    "summary": "When to reach for surgical digital EQ versus broad Pultec and Neve curves, common mud and presence zones, and how a 4 kHz guitar dip opens up crowded vocals.",
+    "coverImage": "",
+    "readingTimeMin": 2,
+    "wordCount": 437,
+    "searchText": "Every EQ move falls into one of two jobs: clearing garbage out of the way, or adding size and shine that wasn’t there before. Picking the wrong tool for the job makes mixes feel sterile or muddy fast. Cut unwanted frequencies with clean digital precision. Boost tone and weight with broad analogue colour. Digital EQ: Your Surgical Scalpel Fully digital EQs (FabFilter Pro Q, TDR Nova, stock DAW parametric EQs) add zero harmonic colouration or transformer grit. They let you pick exact frequencies, dial razor tight Q widths, and trigger dynamic bands only when a problem frequency jumps out. Reach for digital EQ when cleaning up: Non Musical Rumble: Drop a high pass filter (12 or 18 dB/octave standard, 6 gentler, 24+ steeper) to strip useless sub air below instruments that don’t belong there. Muddiness (200 to 400 Hz): Narrow to medium Q dip on guitars, piano, and thick bass. Boxiness (400 to 600 Hz): Medium Q dip on kick, toms, and acoustic body. Vocal Nasality (1 to 2 kHz): Tight Q cut whenever a vocal sounds honky or boxy. Watch out for mixing with your eyes on a spectrum graph: stacking ten tiny surgical notches usually hollows out life and phase faster than leaving a slightly imperfect track alone. Mix frequency zones showing surgical digital cuts versus broad analogue EQ tone shaping Analogue EQ: Broad Curves & Harmonic Iron Analogue hardware emulations (Pultec EQP1A, Neve 1073, API 550A, SSL 4k) give you wide Q bandwidths, fixed frequency steps, and subtle saturation from virtual tubes and transformers. Fewer knobs force faster mixing by ear. Reach for analogue EQ when adding character: Pultec Low Weight (100 Hz): Boost and attenuate slightly together on bass or vocals for thick low end that never turns flabby. Neve or SSL Mid Bite (1 to 2 kHz): Small boost to help clean guitars, distorted guitars, or bass guitar attack cut right through dense drums. Air & Shine (4 to 5 kHz and 12 kHz): Gentle 1073 vocal presence around 4 to 5 kHz or wide 12 kHz Pultec shelf for glossy open air. The Three Step EQ Workflow Follow this order on any crowded mix before reaching for another fader: 1. Cut First (Digital, Narrower Q): Remove rumble, ringing resonances, and mud cleanly. 2. Boost Second (Analogue, Wider Q): Add back warmth, attack, or open top end musically. 3. Clear Masking Third: When guitars bury the vocal, stop cranking the vocal fader louder. Check where the v"
+  },
+  {
+    "slug": "parallel-compression-all-buttons-in-and-why-rhythm-matters",
+    "title": "Parallel Compression: All Buttons In and Why Rhythm Matters",
+    "date": "2026-11-27",
+    "updatedAt": "2026-11-27T07:20:00Z",
+    "status": "published",
+    "pinned": false,
+    "tags": [
+      "Mixing",
+      "Studio",
+      "Notes"
+    ],
+    "summary": "How to pin vocals and drums upfront using UAD 1176 All Buttons mode, why you keep the send locked at 0 dB, and why unrelated rhythms destroy a shared crush bus.",
+    "coverImage": "",
+    "readingTimeMin": 2,
+    "wordCount": 466,
+    "searchText": "Normal compression always trades punch for consistency. Push a vocal or drum bus too hard directly on the track and transients collapse before the groove ever breathes. Parallel compression solves that cleanly: duplicate the signal onto an aux track, smash it relentlessly with a fast compressor, and slide that crushed energy quietly underneath the untouched original. Keep the original transients wide open. Let the crushed bus carry the weight and attitude underneath. Dialing In the UAD 1176 Crush Bus An 1176 (Rev A Bluestripe or LN Rev E from the UAD 1176 collection) excels on parallel buses because its fast response pumps massive excitement back between hits: Vocals (All Buttons In): Slam the ratio into 100:1 ( All Buttons In / British mode), fast release, and slow to medium attack so the needle taps 20 dB (the end of the meter) on phrase openings without staying stuck there. Blending a touch of this pins lead vocals right to the front of dense mixes. Drums: Start at 8:1 or higher pushing 7 to 10+ dB of lively needle bounce across the whole kit. Roll off excess sub rumble on the crush track if low end builds up. Bass: Try 4:1 to 8:1 for 5 to 10 dB of grit, or swap the compressor for parallel distortion filtered to 800 Hz to 2 kHz so bass cuts through small speakers. Comparison showing reverb sends adjusting send level versus parallel compression locking send at 0 dB Lock the Send at 0 dB (Flip the Reverb Rule) Most engineers mess up parallel routing on day one because they treat it like a reverb send. On reverb or delay sends, you leave the aux fader at 0 dB and turn up the send knob. On parallel compression, do the exact opposite : set the send to 0 dB and never touch it again , dial in your heavy compression, and blend using the parallel aux fader . Changing the send changes how hard you drive the compressor threshold and undoes your entire sound. Route your main bus and crush aux together into one combined bus so a single fader still controls total vocal or drum level. Why Rhythm Decides What Shares a Bus Unlike reverb, you cannot throw unrelated instruments into the same parallel compressor: 1. Separate Different Rhythms: Never send drums and vocals into one crush track, and don’t mix lead vocals with rhythmically different backing vocals on the same compressor. Whenever one part hits hard, it ducks the other out of the groove. 2. Glue Matching Rhythms "
+  },
+  {
+    "slug": "the-only-two-compressors-you-actually-need",
+    "title": "The Only Two Compressors You Actually Need",
+    "date": "2026-11-27",
+    "updatedAt": "2026-11-27T07:19:00Z",
+    "status": "published",
+    "pinned": false,
+    "tags": [
+      "Mixing",
+      "Studio",
+      "Notes"
+    ],
+    "summary": "Why ditching menu heavy digital compressors for the UAD 1176 and Teletronix LA2A streamlines every vocal and bass mix, plus which UAD bundles actually include both.",
+    "coverImage": "",
+    "readingTimeMin": 2,
+    "wordCount": 487,
+    "searchText": "Most beginners freeze on compression because stock digital compressors throw graphs, knees, lookahead sliders, and ten hidden menus at you before you hear a single dB of gain reduction. Forget digital compressors for everyday mixing. Two classic hardware emulations cover nearly every vocal, bass, drum, and guitar move you will ever make: the 1176 and the Teletronix LA2A . Stop mixing with your eyes on a graph. Watch the VU needle breathe and trust what hits harder. 1176 (FET): Energy, Attitude & Front Row Punch When a lead vocal, snare, or bass needs aggression and forward energy, reach for an 1176 . Its lightning fast FET circuit reacts immediately and pushes attitude straight into the midrange. Dial in these set and forget vocal starting settings: Attack: 3 (slow to medium on the 1176 scale, where 7 is fastest) so consonants snap through cleanly. Release: 7 (fastest) to bounce right back between syllables. Ratio: 8:1 (or 4:1 for lighter control). Input & Output: Push Input until the gain reduction needle dances around 7 (5 to 10 dB), then match original volume with Output. Keep that needle actively moving for energy rather than pinned flat at one end. Teletronix LA2A (Optical Tube): Smoothness & Warm Weight When a vocal, bass, acoustic guitar, or piano needs warmth, body, and effortless control, put on an LA2A . It is the simplest compressor in any studio: just Peak Reduction and Gain . Ignore the numbers printed around the knobs. Turn up Peak Reduction until you hear 3 to 6 dB of smooth optical leveling hugging the performance together, match your output volume, and move on. Classic serial vocal chain pairing the Teletronix LA2A and UA 1176 plus UAD bundle breakdown Stacking Both in Series on Lead Vocals Putting a gentle LA2A (2 to 6 dB) upfront to catch broad phrasing dynamics, followed by an 1176 (6 to 10 dB) to lock peaks and inject attitude, gives modern lead vocals effortless consistency without sounding choked. Which UAD Pack Actually Gives You Both Universal Audio’s native plugins now run straight inside your DAW on macOS or Windows with zero Apollo DSP hardware required, though the bundle tiers trip people up: UAD Essentials Edition: Gives you the full Teletronix LA2A Leveler Collection (LA2A Silver fast response, LA2A Gray classic medium warmth, and the rare slow LA2) alongside Pultec Passive EQs, Oxide Tape, and Pure Plate Reverb. Watch out: Ess"
+  },
+  {
+    "slug": "stop-mastering-to-14-lufs",
+    "title": "Stop Mastering to -14 LUFS",
+    "date": "2026-11-27",
+    "updatedAt": "2026-11-27T07:18:00Z",
+    "status": "published",
+    "pinned": false,
+    "tags": [
+      "Mastering",
+      "Mixing",
+      "Notes"
+    ],
+    "summary": "Why chasing Spotify normalization leaves masters thin, where modern commercial records actually sit between -12 and -8 LUFS, and the exact EQ and compression chain order.",
+    "coverImage": "",
+    "readingTimeMin": 2,
+    "wordCount": 431,
+    "searchText": "Every independent producer hears the same advice eventually: master your song to 14 LUFS so Spotify won’t turn it down. Follow that rule blindly and your track will sound thinner, quieter, and smaller than almost every record next to it on a playlist. Master to make the song hit as cleanly and emotionally as possible, not to chase an algorithm target. The Myth Behind 14 LUFS Streaming platforms normalize playback levels using loudness algorithms, which only adjust playback volume after upload. They do not magically add punch, density, or limiter glue to a quiet bounce. In the real world, dense modern records usually sit between 12 LUFS and 8 LUFS . Pushing above 8 LUFS enters very loud territory where punchy drums easily squash flat, while sparse acoustic or vocal driven songs with minimal sub bass naturally belong closer to 14 LUFS. Let the arrangement dictate the loudness, not a single blanket number. Export headroom and commercial integrated loudness targets for mastering Fresh Ears First, Chain Order Second Never master a song on the same day you mix it if you can avoid it. Sleep on the bounce, come back with rested ears, and listen front to back once without touching a single plugin so you hear real tonal issues instead of habits. Once you load a mastering chain, the processing order protects your mix: 1. EQ Phase 1 (Before Compression): Use a transparent digital EQ to clean up leftover mud (200 to 400 Hz) and gently tame sharp resonances. If you find yourself carving aggressively, step back into the mix and fix it there. 2. Subtle Bus Compression: Insert a clean VCA compressor (like a Focusrite Red 3 or SSL style bus comp) at 1.5:1 to 3:1 aiming for just 1 to 3 dB of gain reduction. Time the release to the song’s tempo so the whole mix breathes with the groove. 3. EQ Phase 2 (After Compression): Shape tone and polish after the compressor with musical curves, such as a Pultec at 60 or 100 Hz for tight weight, 10 to 16 kHz for finished top sheen, or a tiny 0.5 to 2 dB presence lift at 4 to 5 kHz. Boosting after compression stops your EQ moves from driving harder into the compressor. 4. Stereo Check & Limiting: Keep sub bass frequencies centered (especially if pressing vinyl), verify mono compatibility, and push into your limiter while watching True Peak headroom. Drop your final master alongside a commercial reference into Master Clash for loudness match"
+  },
+  {
+    "slug": "the-zero-dollar-plugin-rack",
+    "title": "The Zero Dollar Plugin Rack",
+    "date": "2026-11-27",
+    "updatedAt": "2026-11-27T07:17:00Z",
+    "status": "published",
+    "pinned": false,
+    "tags": [
+      "Mixing",
+      "Tools",
+      "Notes"
+    ],
+    "summary": "A complete, zero cost mixing and mastering plugin rack pairing proven freeware classics with CRQL ANINA spectral resonance suppression.",
+    "coverImage": "",
+    "readingTimeMin": 2,
+    "wordCount": 441,
+    "searchText": "You don’t need a thousand dollar subscription to build clean, punchy, release ready mixes. Every essential slot in a studio signal chain now has a genuinely serious free plugin that holds up on real records. Tools don’t make the mix, ears do. Once your core tools cost zero dollars, the only excuse left is taste. Surgical EQ & Spectral Suppression TDR Nova (Tokyo Dawn Labs): A clean parallel dynamic EQ that combines surgical bands with frequency selective compression. Perfect for pulling down muddy low mids or taming vocal harshness only when it pokes out. ANINA (CRQL): Developed by Ewan Bristow at crql.works, ANINA is a free spectral resonance suppressor and dynamic shaper (VST3, AU, and CLAP across macOS, Windows, and Linux) operating across up to 1,024 linear frequency bands. Think of it as a zero cost answer to Soothe2 and Trackspacer: smooth out shrill vocal edges, flip on Sidechain Mode to dynamically carve a pocket in guitars or synths whenever the lead vocal hits, audition what is getting cut with Delta , or lock a curve with Freeze . Because spectral processing introduces roughly 11 ms of latency, keep it in your mixing chain rather than tracking live through it. bx cleansweep V2 & bx subfilter (Brainworx): Fast, zero fuss high pass and low pass filters plus a focused sub shaper for tightening kicks and bass. Compression, Analog Glue & Tape TDR Kotelnikov (Tokyo Dawn Labs): One of the cleanest wideband mastering compressors ever released, paid or free. Use it for 1 to 3 dB of transparent dynamic control on mix buses without smearing transients. Klanghelm MJUC Jr. & DC1A: MJUC Jr. gives smooth variable tube compression and gentle harmonic glue on vocals and bass, while DC1A offers fast two knob punch with zero menu paralysis. Analog Obsession (LALA, BUSTERse, FETish): Authentic freeware takes on optical leveling (LALA), British VCA mix bus glue (BUSTERse), and aggressive FET attitude (FETish). Chow Tape Model (ChowDSP): Physically modelled reel to reel tape saturation with real hysteresis, flutter, and smooth top end roll off when a digital mix feels too sterile. Space, Metering & Browser Utilities Valhalla Supermassive: Massive lush delays, ambient throws, and cavernous modulated reverbs with zero price tag. Voxengo SPAN, HOFA 4U & Youlean Loudness Meter: Pair SPAN for real time spectrum balance, HOFA 4U Meter, Fader & MS Pan for true peaks and corre"
+  },
+  {
+    "slug": "pre-mix-and-pre-master-bounce-hygiene",
+    "title": "Pre Mix & Pre Master Bounce Hygiene",
+    "date": "2026-11-27",
+    "updatedAt": "2026-11-27T07:16:00Z",
+    "status": "published",
+    "pinned": false,
+    "tags": [
+      "Studio",
+      "Mixing",
+      "Mastering"
+    ],
+    "summary": "The tracking gain, headroom, sample rate, and export checks that prevent ruined vocal stems and clipped bounces before mixing or mastering begins.",
+    "coverImage": "",
+    "readingTimeMin": 2,
+    "wordCount": 392,
+    "searchText": "Most mix headaches aren’t solved with fancy plugins. They happen before the mix session even opens, or right at the moment someone hits export without checking their meters. Great masters start with clean stems and unclipped headroom. Before Mixing: Tracking & Stem Hygiene Whether you are tracking vocals in a bedroom or exporting multitracks for a collaborator, lock down the basics early: Set Metering to Pre Fader: Keep your DAW meters set to Pre Fader while recording so pulling a channel fader down doesn’t hide a preamp clipping on the way in. Gain Stage for the Loudest Chorus: Record a 10 to 20 second test clip of the loudest vocal belt or heaviest guitar strum, and dial preamp gain so peaks land around 10 dBFS. Plenty of headroom means zero digital clipping when the take gets emotional. Lock Your Sample Rate: Stick to one consistent rate (44.1 kHz or 48 kHz) across your interface, DAW session, and exports. Print Clean, Aligned Stems: Every stem should start cleanly at 0:00 with matching tail lengths and zero accidental stereo reverb baked onto dry mono vocals. Run them through Stem Check before sending stems to anyone else. Before Mastering: Pre Master Export Rules If something still feels harsh, muddy, or buried in the mix, fix it in the mix. Don’t leave broken balances hoping mastering will rescue them later. 1. Strip Temporary Master Limiters: Remove any auto mastering plugins or quick loudness limiters from your master bus before bouncing, while keeping your intentional mix bus EQ or glue compression intact. 2. Leave 2 to 6 dB of Headroom: Confirm there is zero red clipping on the stereo out and aim for mix peaks between 6 dBFS and 2 dBFS so your mastering chain has room to breathe. 3. Export at Native Resolution: Bounce a lossless WAV matching the exact resolution you tracked and mixed in (for example, 48 kHz, 24 bit) instead of upsampling or crushing down to MP3. 4. Protect Your Starts & Fade Tails: Leave half a second of clean space before the first transient and let every reverb tail decay completely to silence. Mastering handles final top and tail trims, while broken fade outs need fixing inside the mix. Drop your pre master or finished master into Pre Flight to catch clipping bursts, intersample peaks, or low end phase issues before release."
+  },
+  {
+    "slug": "why-mixes-fall-apart-in-the-car",
+    "title": "Why Mixes Fall Apart in the Car",
+    "date": "2026-11-27",
+    "updatedAt": "2026-11-27T07:15:00Z",
+    "status": "published",
+    "pinned": false,
+    "tags": [
+      "Mixing",
+      "Studio",
+      "Notes"
+    ],
+    "summary": "Why studio speakers fool your ears after hours in a session, and how one simple reference track workflow keeps your mix translating everywhere.",
+    "coverImage": "",
+    "readingTimeMin": 2,
+    "wordCount": 420,
+    "searchText": "You spend four hours sculpting a snare and vocal in your room, bounce the track feeling unstoppable, take it to the car the next morning, and immediately wonder what happened to the low end. That car shock isn’t bad luck. Without an outside anchor, your ears adapt to whatever imbalance sits in front of you until harsh midrange or bloated bass sounds completely normal. Reference tracks don’t exist so you can copy another artist. They exist to keep your ears honest when perspective disappears. Pick References for Architecture, Not Taste Most producers drop their favorite song into a session and call it a reference. That usually backfires. Pick one or two professionally mixed records that match how you actually want your song to feel, hit, and breathe in the speakers. Before touching an EQ or compressor, write down a quick audit comparing your song against the reference: Emotion & Message: Does the track feel urgent, intimate, heavy, or wide? Focal Point: What owns the front row of the mix? Usually the lead vocal sits dead center while everything else supports it. Supporting Roles: Which instruments sit tucked wide, quiet, or dark so the chorus still has somewhere to explode? Elements Worth Emulating: Are the drums drier than yours? Is the sub tighter? Are backing harmonies tucked lower behind the lead? Level Match or Lie to Yourself Drop the reference track straight onto an audio channel inside your DAW, route it straight to your stereo output (bypassing any mix bus processing), and pull its fader down until its loudness matches your unmastered mix. Human ears always read louder audio as wider, punchier, and brighter. If your reference plays 6 dB louder than your session, every switch tricks you into thinking your mix is broken. Match the volume first, then flip back and forth checking tonal balance, drum punch, and vocal height. Take a Break and Test Blind Whenever your ears feel foggy, step away from the desk, then check your mix with real level matching rather than guesswork: 1. A/B Every Few Moves: Reset your ears against the reference after major EQ, bass, or vocal balance changes rather than at the very end. 2. Test Your Bounces Blind: Drop multiple mix bounces alongside a reference into Master Clash. It seals filenames and locks ITU loudness matching so a louder bounce can never trick your ear. 3. Check Phone & Mono Translation: Run your final render th"
+  },
+  {
     "slug": "the-abbey-road-reverb-trick",
     "title": "The Abbey Road Reverb Trick",
     "date": "2026-11-25",

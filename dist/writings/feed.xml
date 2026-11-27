@@ -6,6 +6,55 @@
     <description>Studio notes, mix breakdowns, release diaries, and essays from Saint Gordon Collective.</description>
     <language>en</language>
     <item>
+      <title>Analogue vs Digital EQ: Cut With a Scalpel, Boost With Iron</title>
+      <link>https://saintgordon.vercel.app/writing?slug=analogue-vs-digital-eq-cut-with-a-scalpel-boost-with-iron</link>
+      <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=analogue-vs-digital-eq-cut-with-a-scalpel-boost-with-iron</guid>
+      <pubDate>Fri, 27 Nov 2026 00:00:00 +0000</pubDate>
+      <description>When to reach for surgical digital EQ versus broad Pultec and Neve curves, common mud and presence zones, and how a 4 kHz guitar dip opens up crowded vocals.</description>
+    </item>
+    <item>
+      <title>Parallel Compression: All Buttons In and Why Rhythm Matters</title>
+      <link>https://saintgordon.vercel.app/writing?slug=parallel-compression-all-buttons-in-and-why-rhythm-matters</link>
+      <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=parallel-compression-all-buttons-in-and-why-rhythm-matters</guid>
+      <pubDate>Fri, 27 Nov 2026 00:00:00 +0000</pubDate>
+      <description>How to pin vocals and drums upfront using UAD 1176 All Buttons mode, why you keep the send locked at 0 dB, and why unrelated rhythms destroy a shared crush bus.</description>
+    </item>
+    <item>
+      <title>The Only Two Compressors You Actually Need</title>
+      <link>https://saintgordon.vercel.app/writing?slug=the-only-two-compressors-you-actually-need</link>
+      <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=the-only-two-compressors-you-actually-need</guid>
+      <pubDate>Fri, 27 Nov 2026 00:00:00 +0000</pubDate>
+      <description>Why ditching menu heavy digital compressors for the UAD 1176 and Teletronix LA2A streamlines every vocal and bass mix, plus which UAD bundles actually include both.</description>
+    </item>
+    <item>
+      <title>Stop Mastering to -14 LUFS</title>
+      <link>https://saintgordon.vercel.app/writing?slug=stop-mastering-to-14-lufs</link>
+      <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=stop-mastering-to-14-lufs</guid>
+      <pubDate>Fri, 27 Nov 2026 00:00:00 +0000</pubDate>
+      <description>Why chasing Spotify normalization leaves masters thin, where modern commercial records actually sit between -12 and -8 LUFS, and the exact EQ and compression chain order.</description>
+    </item>
+    <item>
+      <title>The Zero Dollar Plugin Rack</title>
+      <link>https://saintgordon.vercel.app/writing?slug=the-zero-dollar-plugin-rack</link>
+      <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=the-zero-dollar-plugin-rack</guid>
+      <pubDate>Fri, 27 Nov 2026 00:00:00 +0000</pubDate>
+      <description>A complete, zero cost mixing and mastering plugin rack pairing proven freeware classics with CRQL ANINA spectral resonance suppression.</description>
+    </item>
+    <item>
+      <title>Pre Mix &amp; Pre Master Bounce Hygiene</title>
+      <link>https://saintgordon.vercel.app/writing?slug=pre-mix-and-pre-master-bounce-hygiene</link>
+      <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=pre-mix-and-pre-master-bounce-hygiene</guid>
+      <pubDate>Fri, 27 Nov 2026 00:00:00 +0000</pubDate>
+      <description>The tracking gain, headroom, sample rate, and export checks that prevent ruined vocal stems and clipped bounces before mixing or mastering begins.</description>
+    </item>
+    <item>
+      <title>Why Mixes Fall Apart in the Car</title>
+      <link>https://saintgordon.vercel.app/writing?slug=why-mixes-fall-apart-in-the-car</link>
+      <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=why-mixes-fall-apart-in-the-car</guid>
+      <pubDate>Fri, 27 Nov 2026 00:00:00 +0000</pubDate>
+      <description>Why studio speakers fool your ears after hours in a session, and how one simple reference track workflow keeps your mix translating everywhere.</description>
+    </item>
+    <item>
       <title>The Abbey Road Reverb Trick</title>
       <link>https://saintgordon.vercel.app/writing?slug=the-abbey-road-reverb-trick</link>
       <guid isPermaLink="true">https://saintgordon.vercel.app/writing?slug=the-abbey-road-reverb-trick</guid>
