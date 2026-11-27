@@ -3,6 +3,31 @@
  * Use \n for a new line. Plain text only: no HTML is needed.
  * Music, social links, biography and members are in tracks.js.
  */
+window.SAINT_CONFIG = window.SAINT_CONFIG || {
+  "profileUrl": "https://soundcloud.com/ceannairefr",
+  "playlistUrl": "https://soundcloud.com/ceannairefr/sets/saint-gordon-pieces",
+  "email": "",
+  "socialLinks": [
+    {
+      "label": "Instagram",
+      "url": "https://www.instagram.com/theadvancedguy/"
+    },
+    {
+      "label": "Spotify",
+      "url": "https://open.spotify.com/artist/5MkDcYOhfIerJyO3Woykxy"
+    },
+    {
+      "label": "Apple Music",
+      "url": "https://music.apple.com/artist/saint-gordon/6818967036"
+    },
+    {
+      "label": "SoundCloud",
+      "url": "https://soundcloud.com/ceannairefr"
+    }
+  ],
+  "origins": "Saint Gordon was originally made as a stage name for me. Now it’s become a part of a brand as well as a stage name. I started this collective to let people make music. Fuck the money, fuck the ego. Let’s just make shit and pray other people like it. That’s how I created the collective: a space where other artists can grow together and with each other, free of their own ego and money. That’ll come later.",
+  "members": []
+};
 window.SAINT_CONTENT = {
   home: {
     introduction: "Made from the soul.\nTo find lost souls.",

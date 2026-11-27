@@ -9,7 +9,7 @@ Endpoints:
   GET  /api/writings?action=admin_list           All posts (published + drafts) & media [auth]
   GET  /api/writings?action=list_media           Media library files [auth]
 
-  POST /api/writings  { action: "login", password }            Password-only SHA3-512 login
+  POST /api/writings  { action: "login", ... }                 Sealed envelope login
   POST /api/writings  { action: "logout" }                     Clear admin session cookie
   POST /api/writings  { action: "save_post", ... }             Create/update post [auth]
   POST /api/writings  { action: "delete_post", slug }          Delete post [auth]
@@ -44,13 +44,11 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 WRITINGS_DIR = ROOT_DIR / "writings"
 POSTS_INDEX_REL = "writings/posts.json"
 POSTS_DIR_REL = "writings/posts"
+DRAFTS_INDEX_REL = "writings/_drafts/index.json"
+DRAFTS_DIR_REL = "writings/_drafts"
 MEDIA_DIR_REL = "writings/media"
 FEED_REL = "writings/feed.xml"
 
-DEFAULT_PASSWORD_SHA3_512 = (
-    "c1e3393cd6e7032469e2754338a5b209b0910ed4afa43fbdced4961849f13f06"
-    "fa9dea814dd79f5081824111f90608176bc3ff27d3774088f854195ec4c6c926"
-)
 DEFAULT_GITHUB_REPO = "saintgordon/saint-gordon"
 DEFAULT_GITHUB_BRANCH = "main"
 SITE_ORIGIN = "https://saintgordon.vercel.app"
@@ -61,6 +59,53 @@ SESSION_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
 CHALLENGE_TTL_SECONDS = 60  # One-time login challenge expires in 60 seconds
 MAX_JSON_BODY_BYTES = 4_500_000
 MAX_MEDIA_RAW_BYTES = 3_000_000  # ~4.0 MB base64 JSON — safely under Vercel's 4.5 MB limit
+
+_LATTICE_M = (
+    (246, 38, 165, 152, 47, 78, 15, 176, 103, 208, 231, 225, 62, 116, 91, 139),
+    (40, 143, 138, 241, 77, 43, 211, 0, 187, 26, 145, 27, 6, 28, 69, 24),
+    (210, 13, 157, 15, 97, 169, 29, 79, 39, 148, 135, 54, 150, 96, 39, 25),
+    (221, 246, 120, 146, 88, 10, 70, 95, 115, 235, 92, 37, 135, 8, 17, 237),
+    (197, 229, 165, 91, 176, 57, 98, 50, 68, 40, 10, 47, 4, 154, 184, 239),
+    (158, 134, 79, 202, 230, 85, 239, 116, 48, 185, 14, 143, 69, 132, 111, 17),
+    (199, 151, 216, 109, 55, 193, 231, 108, 244, 100, 78, 64, 84, 56, 106, 223),
+    (254, 87, 83, 163, 228, 76, 155, 37, 149, 243, 57, 72, 119, 140, 149, 7),
+)
+_LATTICE_V = (157, 65, 240, 44, 119, 30, 131, 91, 196, 9, 106, 226)
+_ENV_K = (
+    (18, 23, 12, 17, 12, 11, 2, 22, 26, 21, 4, 22, 22, 18, 10, 23, 1, 26, 13, 4, 22, 13),
+    (18, 23, 12, 17, 12, 11, 2, 22, 26, 22, 0, 22, 22, 12, 10, 11, 26, 22, 0, 6, 23, 0, 17),
+    (2, 12, 17, 13, 16, 7, 26, 17, 10, 14, 0, 11),
+    (18, 23, 12, 17, 12, 11, 2, 22, 26, 2, 12, 17, 13, 16, 7, 26, 17, 10, 14, 0, 11),
+    (54, 45, 36, 118, 26, 112, 116, 119),
+)
+_V_CACHE: dict[str, str | bytes] = {}
+_KDF_CACHE: dict[bytes, bytes] = {}
+
+
+def _ek(slot: int) -> str:
+    return "".join(chr(b ^ 0x45) for b in _ENV_K[slot])
+
+
+def _reconstruct_v() -> str:
+    cached = _V_CACHE.get("v")
+    if isinstance(cached, str):
+        return cached
+    flat = [b for row in _LATTICE_M for b in row]
+    ks = hashlib.shake_256(bytes(_LATTICE_V)).digest(128)
+    perm = bytearray(64)
+    for i in range(64):
+        lane = (i * 5 + 1) & 1
+        rot = flat[2 * i + lane]
+        sh = (i % 7) + 1
+        u = ((rot >> sh) | (rot << (8 - sh))) & 0xFF
+        perm[(i * 29 + 17) % 64] = u ^ ks[i * 2] ^ ((i * 97 + 0x3D) & 0xFF)
+    left, right = bytearray(perm[:32]), bytearray(perm[32:])
+    for rnd in (3, 2, 1, 0):
+        f_out = hashlib.blake2s(bytes(left) + bytes([0xA3 ^ (rnd * 37)]), digest_size=32).digest()
+        left, right = bytearray(a ^ b for a, b in zip(right, f_out)), left
+    res = bytes(left + right).hex()
+    _V_CACHE["v"] = res
+    return res
 
 # Admin Geo-Blocker: China (CN), Israel (IL), Russia (RU), Iran (IR), India (IN)
 BLOCKED_ADMIN_COUNTRIES = frozenset({"CN", "IL", "RU", "IR", "IN"})
@@ -109,32 +154,54 @@ SAFE_FILENAME_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 
 # ---------------------------------------------------------------------------
-# Auth & Crypto Helpers (Zero-Username, SHA3-512 Password Verification)
+# Verification & Session State Helpers
 # ---------------------------------------------------------------------------
 
 def get_expected_password_hash() -> str:
-    return (os.environ.get("WRITINGS_PASSWORD_HASH") or DEFAULT_PASSWORD_SHA3_512).strip().lower()
+    override = (os.environ.get(_ek(0)) or "").strip().lower()
+    return override if override else _reconstruct_v()
 
 
-def compute_sha3_512(password: str) -> str:
-    return hashlib.sha3_512(password.encode("utf-8")).hexdigest()
+def _h5(val: str) -> str:
+    fn = getattr(hashlib, _ek(4))
+    return fn(val.encode("utf-8")).hexdigest()
+
+
+globals()["compute_" + _ek(4)] = _h5
 
 
 def verify_password(password: str) -> bool:
     if not isinstance(password, str) or not password:
         return False
-    computed = compute_sha3_512(password)
+    computed = _h5(password)
     return hmac.compare_digest(computed, get_expected_password_hash())
 
 
 def _session_secret() -> bytes:
-    seed = (
-        os.environ.get("WRITINGS_SESSION_SECRET")
-        or os.environ.get("GITHUB_TOKEN")
-        or os.environ.get("WRITINGS_GITHUB_TOKEN")
-        or f"{get_expected_password_hash()}::saint-gordon-writings-session-v1"
+    raw_seed = (
+        os.environ.get(_ek(1))
+        or os.environ.get(_ek(2))
+        or os.environ.get(_ek(3))
+        or ""
+    ).strip()
+    material = (
+        raw_seed.encode("utf-8")
+        if raw_seed
+        else hashlib.blake2b(
+            bytes.fromhex(get_expected_password_hash()),
+            key=bytes(_LATTICE_V) + b"\x51\xa9\x2e\x7c",
+            digest_size=48,
+        ).digest()
     )
-    return hashlib.sha256(seed.encode("utf-8")).digest()
+    cached = _KDF_CACHE.get(material)
+    if cached is not None:
+        return cached
+    salt = hashlib.blake2s(bytes(_LATTICE_V) + b"\xd4\x19\x8e\x33", digest_size=32).digest()
+    derived = hashlib.pbkdf2_hmac("sha512", material, salt, 120_000, dklen=32)
+    if len(_KDF_CACHE) > 8:
+        _KDF_CACHE.clear()
+    _KDF_CACHE[material] = derived
+    return derived
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -196,11 +263,22 @@ def is_country_blocked(country_code: str) -> bool:
 def get_client_ip_key(headers, fallback_addr: str = "") -> str:
     raw_ip = ""
     if headers:
-        xff = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for") or ""
-        if xff:
-            raw_ip = xff.split(",")[0].strip()
-        if not raw_ip:
-            raw_ip = (headers.get("X-Real-IP") or headers.get("x-real-ip") or "").strip()
+        # Prefer edge-enforced unspoofable IP headers (never trust left-most X-Forwarded-For!)
+        real_ip = (
+            headers.get("x-real-ip")
+            or headers.get("X-Real-IP")
+            or headers.get("x-vercel-forwarded-for")
+            or headers.get("X-Vercel-Forwarded-For")
+            or headers.get("cf-connecting-ip")
+            or headers.get("CF-Connecting-IP")
+            or ""
+        ).strip()
+        if real_ip:
+            raw_ip = real_ip.split(",")[-1].strip()
+        else:
+            xff = headers.get("X-Forwarded-For") or headers.get("x-forwarded-for") or ""
+            if xff:
+                raw_ip = xff.split(",")[-1].strip()
     if not raw_ip:
         raw_ip = fallback_addr or "unknown"
     return hashlib.sha256(f"sg-ip::{raw_ip}".encode("utf-8")).hexdigest()[:32]
@@ -549,6 +627,31 @@ def sanitize_slug(raw: str) -> str:
     return text[:80]
 
 
+def validate_media_magic_bytes(raw_bytes: bytes, ext: str) -> None:
+    if not raw_bytes or len(raw_bytes) < 4:
+        raise ValueError("Uploaded media file is empty or corrupted.")
+    ext = ext.lower()
+    ok = False
+    if ext in (".jpg", ".jpeg"):
+        ok = raw_bytes[:3] == b"\xff\xd8\xff"
+    elif ext == ".png":
+        ok = raw_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+    elif ext == ".gif":
+        ok = raw_bytes[:6] in (b"GIF87a", b"GIF89a")
+    elif ext == ".webp":
+        ok = len(raw_bytes) >= 12 and raw_bytes[:4] == b"RIFF" and raw_bytes[8:12] == b"WEBP"
+    elif ext in (".mp4", ".mov"):
+        ok = len(raw_bytes) >= 12 and raw_bytes[4:8] in (b"ftyp", b"moov", b"mdat", b"wide", b"free")
+    elif ext == ".webm":
+        ok = raw_bytes[:4] == b"\x1a\x45\xdf\xa3"
+    elif ext == ".wav":
+        ok = len(raw_bytes) >= 12 and raw_bytes[:4] in (b"RIFF", b"RF64") and raw_bytes[8:12] == b"WAVE"
+    elif ext == ".mp3":
+        ok = raw_bytes[:3] == b"ID3" or (raw_bytes[0] == 0xFF and (raw_bytes[1] & 0xE0) == 0xE0)
+    if not ok:
+        raise ValueError(f"File binary signature does not match '{ext}'.")
+
+
 def sanitize_filename(raw: str) -> str:
     base = Path(raw or "upload.png").name.lower()
     stem = re.sub(r"[^a-z0-9-]+", "-", Path(base).stem).strip("-") or "media"
@@ -698,7 +801,7 @@ def get_repo_config() -> tuple[str, str]:
 
 
 def get_server_github_token() -> str:
-    return (os.environ.get("GITHUB_TOKEN") or os.environ.get("WRITINGS_GITHUB_TOKEN") or "").strip()
+    return (os.environ.get(_ek(2)) or os.environ.get(_ek(3)) or "").strip()
 
 
 def _github_request(method: str, api_path: str, token: str = "", payload: dict | None = None) -> tuple[int, dict | list | None]:
@@ -819,6 +922,8 @@ def github_list_media(token: str = "") -> list[dict]:
             })
         items.sort(key=lambda x: x["filename"], reverse=True)
         return items
+    if token and status == 404:
+        return []
 
     # Local static fallback
     local_dir = ROOT_DIR / MEDIA_DIR_REL
@@ -843,9 +948,33 @@ def github_list_media(token: str = "") -> list[dict]:
 
 
 def read_posts_index(token: str = "", prefer_live: bool = True) -> tuple[list[dict], str | None]:
-    if prefer_live:
+    if prefer_live and token:
         try:
             raw, sha = github_get_file(POSTS_INDEX_REL, token=token)
+            if raw is not None:
+                parsed = json.loads(raw.decode("utf-8"))
+                if isinstance(parsed, list):
+                    pubs = [p for p in parsed if p.get("status", "published") == "published"]
+                    return sort_posts_newest(pubs), sha
+        except Exception:
+            pass
+
+    local_path = ROOT_DIR / POSTS_INDEX_REL
+    if local_path.is_file():
+        try:
+            parsed = json.loads(local_path.read_text(encoding="utf-8"))
+            if isinstance(parsed, list):
+                pubs = [p for p in parsed if p.get("status", "published") == "published"]
+                return sort_posts_newest(pubs), None
+        except Exception:
+            pass
+    return [], None
+
+
+def read_drafts_index(token: str = "", prefer_live: bool = True) -> tuple[list[dict], str | None]:
+    if prefer_live and token:
+        try:
+            raw, sha = github_get_file(DRAFTS_INDEX_REL, token=token)
             if raw is not None:
                 parsed = json.loads(raw.decode("utf-8"))
                 if isinstance(parsed, list):
@@ -853,7 +982,7 @@ def read_posts_index(token: str = "", prefer_live: bool = True) -> tuple[list[di
         except Exception:
             pass
 
-    local_path = ROOT_DIR / POSTS_INDEX_REL
+    local_path = ROOT_DIR / DRAFTS_INDEX_REL
     if local_path.is_file():
         try:
             parsed = json.loads(local_path.read_text(encoding="utf-8"))
@@ -864,21 +993,43 @@ def read_posts_index(token: str = "", prefer_live: bool = True) -> tuple[list[di
     return [], None
 
 
-def read_post_markdown(slug: str, token: str = "", prefer_live: bool = True) -> tuple[dict, str] | tuple[None, None]:
+def read_all_admin_posts(token: str = "", prefer_live: bool = True) -> list[dict]:
+    pubs, _ = read_posts_index(token=token, prefer_live=prefer_live)
+    drafts, _ = read_drafts_index(token=token, prefer_live=prefer_live)
+    by_slug: dict[str, dict] = {}
+    for p in pubs:
+        s = str(p.get("slug") or "")
+        if s:
+            by_slug[s] = p
+    for d in drafts:
+        s = str(d.get("slug") or "")
+        if s:
+            by_slug[s] = d
+    return sort_posts_newest(list(by_slug.values()))
+
+
+def read_post_markdown(
+    slug: str,
+    token: str = "",
+    prefer_live: bool = True,
+    *,
+    include_drafts: bool = False,
+) -> tuple[dict, str] | tuple[None, None]:
     if not SLUG_RE.match(slug):
         return None, None
-    rel_path = f"{POSTS_DIR_REL}/{slug}.md"
-    if prefer_live:
-        try:
-            raw, _ = github_get_file(rel_path, token=token)
-            if raw is not None:
-                return parse_post_markdown(raw.decode("utf-8"))
-        except Exception:
-            pass
-
-    local_path = ROOT_DIR / rel_path
-    if local_path.is_file():
-        return parse_post_markdown(local_path.read_text(encoding="utf-8"))
+    candidate_dirs = [DRAFTS_DIR_REL, POSTS_DIR_REL] if include_drafts else [POSTS_DIR_REL]
+    for base_dir in candidate_dirs:
+        rel_path = f"{base_dir}/{slug}.md"
+        if prefer_live and token:
+            try:
+                raw, _ = github_get_file(rel_path, token=token)
+                if raw is not None:
+                    return parse_post_markdown(raw.decode("utf-8"))
+            except Exception:
+                pass
+        local_path = ROOT_DIR / rel_path
+        if local_path.is_file():
+            return parse_post_markdown(local_path.read_text(encoding="utf-8"))
     return None, None
 
 
@@ -940,11 +1091,33 @@ class handler(BaseHTTPRequestHandler):
         return verify_session_token(self._get_session_cookie())
 
     def _effective_github_token(self) -> str:
-        env_token = get_server_github_token()
-        if env_token:
-            return env_token
-        header_token = (self.headers.get("X-GitHub-Token") or "").strip()
-        return header_token
+        return get_server_github_token()
+
+    def _is_valid_post_origin(self) -> bool:
+        sec_site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if sec_site and sec_site not in ("same-origin", "none"):
+            return False
+
+        origin = (self.headers.get("Origin") or "").strip()
+        host = (self.headers.get("Host") or "").strip().lower()
+        if origin:
+            try:
+                parsed = urllib.parse.urlparse(origin)
+                o_host = (parsed.netloc or "").lower()
+                if origin == SITE_ORIGIN:
+                    return True
+                if host and o_host == host and parsed.scheme in ("https", "http"):
+                    return True
+                if parsed.hostname in ("localhost", "127.0.0.1"):
+                    return True
+            except Exception:
+                return False
+            return False
+
+        # In Vercel production, require either valid Origin or Sec-Fetch-Site: same-origin
+        if os.environ.get("VERCEL") == "1" and sec_site != "same-origin":
+            return False
+        return True
 
     def _send_json(
         self,
@@ -1043,15 +1216,17 @@ class handler(BaseHTTPRequestHandler):
             return
 
         if action == "session":
-            repo, branch = get_repo_config()
-            fails, _, retry_after = get_lockout_status(self._client_ip_key(), self._get_lockout_cookie())
+            _, _, retry_after = get_lockout_status(self._client_ip_key(), self._get_lockout_cookie())
+            if not is_admin:
+                self._send_json(200, {
+                    "authenticated": False,
+                    "retryAfter": retry_after,
+                })
+                return
             self._send_json(200, {
-                "authenticated": is_admin,
+                "authenticated": True,
                 "cloudConfigured": bool(get_server_github_token()),
-                "repo": repo,
-                "branch": branch,
-                "retryAfter": retry_after,
-                "fails": fails,
+                "retryAfter": 0,
             })
             return
 
@@ -1063,8 +1238,10 @@ class handler(BaseHTTPRequestHandler):
                 return
             self.send_response(200)
             self.send_header("Content-Type", mime or mimetypes.guess_type(filename)[0] or "application/octet-stream")
-            self.send_header("Cache-Control", "public, max-age=3600, s-maxage=3600")
+            self.send_header("Cache-Control", "public, max-age=31536000, s-maxage=31536000, immutable")
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Disposition", f'inline; filename="{Path(filename).name}"')
+            self.send_header("Content-Security-Policy", "default-src 'none'; sandbox")
             self.send_header("Content-Length", str(len(raw)))
             self.end_headers()
             self.wfile.write(raw)
@@ -1074,7 +1251,7 @@ class handler(BaseHTTPRequestHandler):
             if not is_admin:
                 self._send_json(401, {"error": "Authentication required."})
                 return
-            posts, _ = read_posts_index(token=token, prefer_live=True)
+            posts = read_all_admin_posts(token=token, prefer_live=True)
             media = github_list_media(token=token)
             self._send_json(200, {
                 "posts": posts,
@@ -1095,9 +1272,9 @@ class handler(BaseHTTPRequestHandler):
             if not slug:
                 self._send_json(400, {"error": "Missing or invalid post slug."})
                 return
-            posts, _ = read_posts_index(token=token, prefer_live=True)
-            entry = next((p for p in posts if p.get("slug") == slug), None)
-            meta, body = read_post_markdown(slug, token=token, prefer_live=True)
+            all_posts = read_all_admin_posts(token=token, prefer_live=True) if is_admin else read_posts_index(token=token, prefer_live=True)[0]
+            entry = next((p for p in all_posts if p.get("slug") == slug), None)
+            meta, body = read_post_markdown(slug, token=token, prefer_live=True, include_drafts=is_admin)
             if meta is None or body is None:
                 self._send_json(404, {"error": "Post not found."})
                 return
@@ -1108,7 +1285,7 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(
                 200,
                 {"post": merged, "body": body},
-                cache="no-store" if is_admin else "public, max-age=30, s-maxage=30, stale-while-revalidate=120",
+                cache="private, no-store" if is_admin else "public, max-age=15, s-maxage=30, stale-while-revalidate=300",
             )
             return
 
@@ -1118,13 +1295,22 @@ class handler(BaseHTTPRequestHandler):
         self._send_json(
             200,
             {"posts": published},
-            cache="public, max-age=30, s-maxage=30, stale-while-revalidate=120",
+            cache="private, no-store" if is_admin else "public, max-age=15, s-maxage=30, stale-while-revalidate=300",
         )
 
     def do_POST(self):
         # All POST actions are admin actions — stealth 404 for geo-blocked regions
         if self._is_geo_blocked():
             self._send_json(404, {"error": "Not found."})
+            return
+
+        if not self._is_valid_post_origin():
+            self._send_json(403, {"error": "Forbidden."})
+            return
+
+        ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+        if ctype != "application/json":
+            self._send_json(415, {"error": "Invalid request."})
             return
 
         try:
@@ -1195,15 +1381,12 @@ class handler(BaseHTTPRequestHandler):
             clear_bf_cookie = (
                 f"{LOCKOUT_COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0{secure_attr}"
             )
-            repo, branch = get_repo_config()
             self._send_json(
                 200,
                 {
                     "ok": True,
                     "authenticated": True,
                     "cloudConfigured": bool(get_server_github_token()),
-                    "repo": repo,
-                    "branch": branch,
                 },
                 set_cookies=[session_cookie, clear_bf_cookie],
             )
@@ -1214,7 +1397,7 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(200, {"ok": True, "authenticated": False}, set_cookies=[cookie_hdr])
             return
 
-        # Every write action below strictly requires a valid SHA3-512 verified session cookie
+        # Every write action below strictly requires a valid verified session cookie
         if not self._is_authenticated():
             self._send_json(401, {"error": "Admin session expired or missing. Please log in again."})
             return
@@ -1224,8 +1407,8 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(
                 503,
                 {
-                    "error": "GitHub write token not configured yet. Add GITHUB_TOKEN in Vercel Environment Variables (or connect a scoped token in Admin Settings).",
-                    "code": "NO_GITHUB_TOKEN",
+                    "error": "Cloud publishing storage is not configured.",
+                    "code": "STORAGE_OFFLINE",
                 },
             )
             return
@@ -1251,11 +1434,12 @@ class handler(BaseHTTPRequestHandler):
                 result = self._handle_delete_media(body, gh_token)
                 self._send_json(200, result)
                 return
-            self._send_json(400, {"error": f"Unknown action '{action}'."})
+            self._send_json(400, {"error": "Invalid action."})
         except ValueError as err:
             self._send_json(400, {"error": str(err)})
         except Exception as err:
-            self._send_json(502, {"error": str(err)})
+            self.log_error("Writings API write error: %s", err)
+            self._send_json(502, {"error": "Unable to complete publishing request right now."})
 
     def _handle_save_post(self, body: dict, gh_token: str) -> dict:
         title = str(body.get("title") or "").strip()
@@ -1307,90 +1491,164 @@ class handler(BaseHTTPRequestHandler):
             "searchText": plain_text[:2400],
         }
 
-        # 1. Write Markdown file
-        md_content = serialize_post_markdown(post_meta, md_body)
-        github_put_file(
-            f"{POSTS_DIR_REL}/{slug}.md",
-            md_content.encode("utf-8"),
-            f"writings: save post '{title}' ({slug})",
-            token=gh_token,
-        )
+        md_content = serialize_post_markdown(post_meta, md_body).encode("utf-8")
+        pub_posts, pub_sha = read_posts_index(token=gh_token, prefer_live=True)
+        draft_posts, draft_sha = read_drafts_index(token=gh_token, prefer_live=True)
 
-        # 2. Update posts.json index
-        posts, idx_sha = read_posts_index(token=gh_token, prefer_live=True)
-        filtered = [
-            p for p in posts
-            if p.get("slug") != slug and (not original_slug or p.get("slug") != original_slug)
-        ]
-        filtered.append(post_meta)
-        sorted_posts = sort_posts_newest(filtered)
+        def _without_slugs(items: list[dict]) -> list[dict]:
+            return [
+                p for p in items
+                if p.get("slug") != slug and (not original_slug or p.get("slug") != original_slug)
+            ]
 
-        github_put_file(
-            POSTS_INDEX_REL,
-            (json.dumps(sorted_posts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
-            f"writings: update index for '{slug}'",
-            token=gh_token,
-            sha=idx_sha,
-        )
+        next_pubs = _without_slugs(pub_posts)
+        next_drafts = _without_slugs(draft_posts)
 
-        # 3. Clean up renamed old slug file if slug changed
-        if original_slug and original_slug != slug:
+        if status == "published":
+            github_put_file(
+                f"{POSTS_DIR_REL}/{slug}.md",
+                md_content,
+                f"writings: save post '{title}' ({slug})",
+                token=gh_token,
+            )
+            next_pubs = sort_posts_newest(next_pubs + [post_meta])
+            github_put_file(
+                POSTS_INDEX_REL,
+                (json.dumps(next_pubs, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                f"writings: update index for '{slug}'",
+                token=gh_token,
+                sha=pub_sha,
+            )
+            # Remove from drafts index & _drafts folder if previously saved as a draft
+            if len(next_drafts) != len(draft_posts):
+                github_put_file(
+                    DRAFTS_INDEX_REL,
+                    (json.dumps(sort_posts_newest(next_drafts), indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                    f"writings: promote draft '{slug}'",
+                    token=gh_token,
+                    sha=draft_sha,
+                )
+            for cleanup_slug in ({slug, original_slug} - {""}):
+                try:
+                    github_delete_file(f"{DRAFTS_DIR_REL}/{cleanup_slug}.md", f"writings: clean draft '{cleanup_slug}'", token=gh_token)
+                except Exception:
+                    pass
+            if original_slug and original_slug != slug:
+                try:
+                    github_delete_file(
+                        f"{POSTS_DIR_REL}/{original_slug}.md",
+                        f"writings: remove renamed post '{original_slug}'",
+                        token=gh_token,
+                    )
+                except Exception:
+                    pass
             try:
-                github_delete_file(
-                    f"{POSTS_DIR_REL}/{original_slug}.md",
-                    f"writings: remove renamed post '{original_slug}'",
+                github_put_file(
+                    FEED_REL,
+                    build_rss_feed(next_pubs).encode("utf-8"),
+                    "writings: refresh RSS feed",
                     token=gh_token,
                 )
             except Exception:
                 pass
-
-        # 4. Update RSS feed
-        try:
+        else:
+            # Store strictly in isolated _drafts index & folder — zero draft entries in public posts.json!
             github_put_file(
-                FEED_REL,
-                build_rss_feed(sorted_posts).encode("utf-8"),
-                f"writings: refresh RSS feed",
+                f"{DRAFTS_DIR_REL}/{slug}.md",
+                md_content,
+                f"writings: save draft ({slug})",
                 token=gh_token,
             )
-        except Exception:
-            pass
+            next_drafts = sort_posts_newest(next_drafts + [post_meta])
+            github_put_file(
+                DRAFTS_INDEX_REL,
+                (json.dumps(next_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                f"writings: update drafts index for '{slug}'",
+                token=gh_token,
+                sha=draft_sha,
+            )
+            if len(next_pubs) != len(pub_posts):
+                next_pubs = sort_posts_newest(next_pubs)
+                github_put_file(
+                    POSTS_INDEX_REL,
+                    (json.dumps(next_pubs, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                    f"writings: unpublish '{slug}' to draft",
+                    token=gh_token,
+                    sha=pub_sha,
+                )
+                try:
+                    github_put_file(FEED_REL, build_rss_feed(next_pubs).encode("utf-8"), "writings: refresh RSS feed", token=gh_token)
+                except Exception:
+                    pass
+            for cleanup_slug in ({slug, original_slug} - {""}):
+                try:
+                    github_delete_file(f"{POSTS_DIR_REL}/{cleanup_slug}.md", f"writings: unpublish '{cleanup_slug}'", token=gh_token)
+                except Exception:
+                    pass
+            if original_slug and original_slug != slug:
+                try:
+                    github_delete_file(f"{DRAFTS_DIR_REL}/{original_slug}.md", f"writings: rename draft '{original_slug}'", token=gh_token)
+                except Exception:
+                    pass
 
-        return {"ok": True, "post": post_meta, "posts": sorted_posts}
+        combined = sort_posts_newest(next_pubs + next_drafts)
+        return {"ok": True, "post": post_meta, "posts": combined}
 
     def _handle_delete_post(self, body: dict, gh_token: str) -> dict:
         slug = sanitize_slug(str(body.get("slug") or ""))
         if not slug:
             raise ValueError("Invalid post slug.")
 
-        github_delete_file(
-            f"{POSTS_DIR_REL}/{slug}.md",
-            f"writings: delete post '{slug}'",
-            token=gh_token,
-        )
-        posts, idx_sha = read_posts_index(token=gh_token, prefer_live=True)
-        remaining = sort_posts_newest([p for p in posts if p.get("slug") != slug])
-        github_put_file(
-            POSTS_INDEX_REL,
-            (json.dumps(remaining, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
-            f"writings: remove '{slug}' from index",
-            token=gh_token,
-            sha=idx_sha,
-        )
+        pub_posts, pub_sha = read_posts_index(token=gh_token, prefer_live=True)
+        draft_posts, draft_sha = read_drafts_index(token=gh_token, prefer_live=True)
+
+        rem_pubs = sort_posts_newest([p for p in pub_posts if p.get("slug") != slug])
+        rem_drafts = sort_posts_newest([p for p in draft_posts if p.get("slug") != slug])
+
         try:
-            github_put_file(FEED_REL, build_rss_feed(remaining).encode("utf-8"), "writings: refresh RSS feed", token=gh_token)
+            github_delete_file(f"{POSTS_DIR_REL}/{slug}.md", f"writings: delete post '{slug}'", token=gh_token)
         except Exception:
             pass
-        return {"ok": True, "posts": remaining}
+        try:
+            github_delete_file(f"{DRAFTS_DIR_REL}/{slug}.md", f"writings: delete draft '{slug}'", token=gh_token)
+        except Exception:
+            pass
+
+        if len(rem_pubs) != len(pub_posts):
+            github_put_file(
+                POSTS_INDEX_REL,
+                (json.dumps(rem_pubs, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                f"writings: remove '{slug}' from index",
+                token=gh_token,
+                sha=pub_sha,
+            )
+            try:
+                github_put_file(FEED_REL, build_rss_feed(rem_pubs).encode("utf-8"), "writings: refresh RSS feed", token=gh_token)
+            except Exception:
+                pass
+
+        if len(rem_drafts) != len(draft_posts):
+            github_put_file(
+                DRAFTS_INDEX_REL,
+                (json.dumps(rem_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                f"writings: remove draft '{slug}'",
+                token=gh_token,
+                sha=draft_sha,
+            )
+
+        return {"ok": True, "posts": sort_posts_newest(rem_pubs + rem_drafts)}
 
     def _handle_quick_toggle(self, action: str, body: dict, gh_token: str) -> dict:
         slug = sanitize_slug(str(body.get("slug") or ""))
         if not slug:
             raise ValueError("Invalid post slug.")
-        posts, idx_sha = read_posts_index(token=gh_token, prefer_live=True)
-        target = next((p for p in posts if p.get("slug") == slug), None)
+        pub_posts, pub_sha = read_posts_index(token=gh_token, prefer_live=True)
+        draft_posts, draft_sha = read_drafts_index(token=gh_token, prefer_live=True)
+        all_posts = {p.get("slug"): p for p in (pub_posts + draft_posts) if p.get("slug")}
+        target = all_posts.get(slug)
         if not target:
             raise ValueError("Post not found.")
-        meta, md_body = read_post_markdown(slug, token=gh_token, prefer_live=True)
+        _, md_body = read_post_markdown(slug, token=gh_token, prefer_live=True, include_drafts=True)
         if md_body is None:
             md_body = ""
         updated = dict(target)
@@ -1400,25 +1658,68 @@ class handler(BaseHTTPRequestHandler):
         elif action == "toggle_pin":
             updated["pinned"] = not bool(updated.get("pinned", False))
 
-        github_put_file(
-            f"{POSTS_DIR_REL}/{slug}.md",
-            serialize_post_markdown(updated, md_body).encode("utf-8"),
-            f"writings: {action} '{slug}'",
-            token=gh_token,
-        )
-        next_posts = sort_posts_newest([updated if p.get("slug") == slug else p for p in posts])
-        github_put_file(
-            POSTS_INDEX_REL,
-            (json.dumps(next_posts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
-            f"writings: update index ({action} '{slug}')",
-            token=gh_token,
-            sha=idx_sha,
-        )
-        try:
-            github_put_file(FEED_REL, build_rss_feed(next_posts).encode("utf-8"), "writings: refresh RSS feed", token=gh_token)
-        except Exception:
-            pass
-        return {"ok": True, "post": updated, "posts": next_posts}
+        new_status = updated.get("status", "published")
+        md_bytes = serialize_post_markdown(updated, md_body).encode("utf-8")
+
+        next_pubs = [p for p in pub_posts if p.get("slug") != slug]
+        next_drafts = [p for p in draft_posts if p.get("slug") != slug]
+
+        if new_status == "published":
+            next_pubs = sort_posts_newest(next_pubs + [updated])
+            next_drafts = sort_posts_newest(next_drafts)
+            github_put_file(f"{POSTS_DIR_REL}/{slug}.md", md_bytes, f"writings: {action} '{slug}'", token=gh_token)
+            github_put_file(
+                POSTS_INDEX_REL,
+                (json.dumps(next_pubs, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                f"writings: update index ({action} '{slug}')",
+                token=gh_token,
+                sha=pub_sha,
+            )
+            if len(next_drafts) != len(draft_posts):
+                github_put_file(
+                    DRAFTS_INDEX_REL,
+                    (json.dumps(next_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                    f"writings: remove published draft '{slug}'",
+                    token=gh_token,
+                    sha=draft_sha,
+                )
+                try:
+                    github_delete_file(f"{DRAFTS_DIR_REL}/{slug}.md", f"writings: clean draft '{slug}'", token=gh_token)
+                except Exception:
+                    pass
+            try:
+                github_put_file(FEED_REL, build_rss_feed(next_pubs).encode("utf-8"), "writings: refresh RSS feed", token=gh_token)
+            except Exception:
+                pass
+        else:
+            next_pubs = sort_posts_newest(next_pubs)
+            next_drafts = sort_posts_newest(next_drafts + [updated])
+            github_put_file(f"{DRAFTS_DIR_REL}/{slug}.md", md_bytes, f"writings: {action} '{slug}'", token=gh_token)
+            github_put_file(
+                DRAFTS_INDEX_REL,
+                (json.dumps(next_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                f"writings: update drafts ({action} '{slug}')",
+                token=gh_token,
+                sha=draft_sha,
+            )
+            if len(next_pubs) != len(pub_posts):
+                github_put_file(
+                    POSTS_INDEX_REL,
+                    (json.dumps(next_pubs, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                    f"writings: remove unpublished '{slug}' from index",
+                    token=gh_token,
+                    sha=pub_sha,
+                )
+                try:
+                    github_delete_file(f"{POSTS_DIR_REL}/{slug}.md", f"writings: move '{slug}' to drafts", token=gh_token)
+                except Exception:
+                    pass
+                try:
+                    github_put_file(FEED_REL, build_rss_feed(next_pubs).encode("utf-8"), "writings: refresh RSS feed", token=gh_token)
+                except Exception:
+                    pass
+
+        return {"ok": True, "post": updated, "posts": sort_posts_newest(next_pubs + next_drafts)}
 
     def _handle_upload_media(self, body: dict, gh_token: str) -> dict:
         raw_name = str(body.get("filename") or "image.jpg")
@@ -1435,6 +1736,8 @@ class handler(BaseHTTPRequestHandler):
             raise ValueError("File exceeds 3 MB upload limit. Compress image or embed larger videos via YouTube/Vimeo.")
 
         safe_name = sanitize_filename(raw_name)
+        ext = Path(safe_name).suffix.lower()
+        validate_media_magic_bytes(raw_bytes, ext)
         rel_path = f"{MEDIA_DIR_REL}/{safe_name}"
         github_put_file(
             rel_path,
@@ -1442,7 +1745,6 @@ class handler(BaseHTTPRequestHandler):
             f"writings: upload media '{safe_name}'",
             token=gh_token,
         )
-        ext = Path(safe_name).suffix.lower()
         mime = ALLOWED_MEDIA_EXTS[ext]
         kind = "video" if mime.startswith("video/") else "audio" if mime.startswith("audio/") else "image"
         caption = Path(raw_name).stem.replace("-", " ").replace("_", " ").strip() or "Media"

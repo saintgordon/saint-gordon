@@ -14,7 +14,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from api import writings
+from api import releases, writings
 
 
 class _FakeGitHubStore:
@@ -85,6 +85,60 @@ class WritingsApiTests(unittest.TestCase):
         self.assertEqual(len(expected), 128)
         self.assertFalse(writings.verify_password(""))
         self.assertFalse(writings.verify_password("wrong-password-123"))
+
+        # Heavy obfuscation checks (1A): no literal hash, env names, or AV-unsafe eval/exec in api/writings.py
+        src = (ROOT / "api" / "writings.py").read_text(encoding="utf-8")
+        self.assertNotIn(expected, src)
+        self.assertNotIn(expected[:24], src)
+        self.assertNotIn("WRITINGS_PASSWORD_HASH", src)
+        self.assertNotIn("WRITINGS_SESSION_SECRET", src)
+        self.assertNotIn("GITHUB_TOKEN", src)
+        self.assertNotIn("sha3_512", src)
+        self.assertNotIn("eval(", src)
+        self.assertNotIn("exec(", src)
+
+    def test_ip_spoofing_resistance_and_releases_cors(self):
+        # 2C: Spoofed left-most X-Forwarded-For must NOT override x-real-ip or right-most XFF
+        k_real = writings.get_client_ip_key({
+            "X-Forwarded-For": "1.2.3.4, 203.0.113.9",
+            "x-real-ip": "203.0.113.9",
+        })
+        k_spoof_attempt = writings.get_client_ip_key({
+            "X-Forwarded-For": "99.88.77.66, 203.0.113.9",
+            "x-real-ip": "203.0.113.9",
+        })
+        self.assertEqual(k_real, k_spoof_attempt)
+
+        k_xff_rightmost = writings.get_client_ip_key({"X-Forwarded-For": "8.8.8.8, 198.51.100.42"})
+        k_xff_spoof = writings.get_client_ip_key({"X-Forwarded-For": "4.4.4.4, 198.51.100.42"})
+        self.assertEqual(k_xff_rightmost, k_xff_spoof)
+
+        # Section 3.3: Restricted CORS on /api/releases (no wildcard *)
+        self.assertIn("https://saintgordon.vercel.app", releases.ALLOWED_ORIGINS)
+        self.assertIn("http://localhost:8000", releases.ALLOWED_ORIGINS)
+        self.assertNotIn("*", releases.ALLOWED_ORIGINS)
+        self.assertNotIn("https://evil.example", releases.ALLOWED_ORIGINS)
+
+        rel_srv = HTTPServer(("127.0.0.1", 0), releases.handler)
+        rel_thread = threading.Thread(target=rel_srv.serve_forever, daemon=True)
+        rel_thread.start()
+        try:
+            with mock.patch.object(releases, "build", return_value=([{"slug": "t1"}], [])):
+                req_ok = urllib.request.Request(
+                    f"http://127.0.0.1:{rel_srv.server_port}/api/releases",
+                    headers={"Origin": "https://saintgordon.vercel.app"},
+                )
+                with urllib.request.urlopen(req_ok, timeout=5) as r_ok:
+                    self.assertEqual(r_ok.headers.get("Access-Control-Allow-Origin"), "https://saintgordon.vercel.app")
+                req_evil = urllib.request.Request(
+                    f"http://127.0.0.1:{rel_srv.server_port}/api/releases",
+                    headers={"Origin": "https://evil.example"},
+                )
+                with urllib.request.urlopen(req_evil, timeout=5) as r_evil:
+                    self.assertIsNone(r_evil.headers.get("Access-Control-Allow-Origin"))
+        finally:
+            rel_srv.shutdown()
+            rel_srv.server_close()
 
     def test_session_token_roundtrip_and_tamper_rejection(self):
         tok = writings.create_session_token(now=1_700_000_000)
@@ -261,9 +315,12 @@ class WritingsApiTests(unittest.TestCase):
                     hdrs_out["_set_cookies"] = resp.headers.get_all("Set-Cookie") or []
                     return resp.status, hdrs_out, resp.read()
             except urllib.error.HTTPError as err:
-                hdrs_out = dict(err.headers.items())
-                hdrs_out["_set_cookies"] = err.headers.get_all("Set-Cookie") or []
-                return err.code, hdrs_out, err.read()
+                try:
+                    hdrs_out = dict(err.headers.items())
+                    hdrs_out["_set_cookies"] = err.headers.get_all("Set-Cookie") or []
+                    return err.code, hdrs_out, err.read()
+                finally:
+                    err.close()
 
         try:
             with mock.patch.dict(os.environ, {"WRITINGS_PASSWORD_HASH": test_hash, "GITHUB_TOKEN": "ghp_e2e_token_xyz"}), \
@@ -293,9 +350,34 @@ class WritingsApiTests(unittest.TestCase):
                     st_pub, _, _ = http_call("GET", "/api/writings?action=list", headers={"X-Vercel-IP-Country": country})
                     self.assertEqual(st_pub, 200)
 
-                # 2. Plaintext login rejected with 400
+                # 2. Plaintext login rejected with 400; cross-origin POST rejected with 403 (2E); unauth session scrubbed (3.1)
                 st_pt, _, _ = http_call("POST", "/api/writings", {"action": "login", "password": test_pwd})
                 self.assertEqual(st_pt, 400)
+
+                st_csrf, _, _ = http_call(
+                    "POST",
+                    "/api/writings",
+                    {"action": "logout"},
+                    headers={"Origin": "https://evil.example"},
+                )
+                self.assertEqual(st_csrf, 403)
+
+                st_sec_fetch, _, _ = http_call(
+                    "POST",
+                    "/api/writings",
+                    {"action": "logout"},
+                    headers={"Sec-Fetch-Site": "cross-site"},
+                )
+                self.assertEqual(st_sec_fetch, 403)
+
+                st_unauth_sess, _, raw_unauth_sess = http_call("GET", "/api/writings?action=session")
+                self.assertEqual(st_unauth_sess, 200)
+                unauth_sess = json.loads(raw_unauth_sess)
+                self.assertEqual(unauth_sess["authenticated"], False)
+                self.assertNotIn("repo", unauth_sess)
+                self.assertNotIn("branch", unauth_sess)
+                self.assertNotIn("cloudConfigured", unauth_sess)
+                self.assertNotIn("fails", unauth_sess)
 
                 # 3. Valid ECDH P-256 encrypted login succeeds & sets HttpOnly session cookie
                 st_ch, _, raw_ch = http_call("GET", "/api/writings?action=challenge")
@@ -334,7 +416,16 @@ class WritingsApiTests(unittest.TestCase):
                 st_m, hdrs_m, raw_m = http_call("GET", up_data["media"]["liveUrl"])
                 self.assertEqual(st_m, 200)
                 self.assertEqual(hdrs_m.get("Content-Type"), "image/png")
+                self.assertIn("sandbox", hdrs_m.get("Content-Security-Policy", ""))
                 self.assertEqual(raw_m, png_1x1)
+
+                # 4b. Disguised XSS HTML uploaded as .png is rejected by magic-byte check (3.2)
+                st_bad_media, _, _ = http_call("POST", "/api/writings", {
+                    "action": "upload_media",
+                    "filename": "evil.png",
+                    "dataBase64": base64.b64encode(b"<script>alert(1)</script>").decode("ascii"),
+                }, headers=auth_hdr)
+                self.assertEqual(st_bad_media, 400)
 
                 # 5. Create & publish post referencing uploaded image as cover & inline Markdown
                 st_save, _, raw_save = http_call("POST", "/api/writings", {
@@ -363,13 +454,17 @@ class WritingsApiTests(unittest.TestCase):
                 self.assertEqual(st_pub_post, 200)
                 self.assertIn(media_path, json.loads(raw_pub_post)["body"])
 
-                # 7. Toggle status to Draft -> hidden publicly, visible in admin_list
+                # 7. Toggle status to Draft -> isolated in writings/_drafts/, removed from public posts.json & posts/ (1B)
                 st_tog, _, raw_tog = http_call("POST", "/api/writings", {
                     "action": "toggle_status",
                     "slug": "studio-mix-breakdown",
                 }, headers=auth_hdr)
                 self.assertEqual(st_tog, 200)
                 self.assertEqual(json.loads(raw_tog)["post"]["status"], "draft")
+                self.assertEqual(json.loads(store.files[writings.POSTS_INDEX_REL].decode("utf-8")), [])
+                self.assertNotIn("writings/posts/studio-mix-breakdown.md", store.files)
+                self.assertIn("writings/_drafts/studio-mix-breakdown.md", store.files)
+                self.assertEqual(len(json.loads(store.files[writings.DRAFTS_INDEX_REL].decode("utf-8"))), 1)
 
                 st_pub_draft, _, _ = http_call("GET", "/api/writings?action=post&slug=studio-mix-breakdown")
                 self.assertEqual(st_pub_draft, 404)

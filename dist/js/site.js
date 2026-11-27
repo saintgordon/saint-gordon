@@ -4,51 +4,50 @@
   const config = window.SAINT_CONFIG || {};
   const localTracks = window.SAINT_TRACKS || [];
   function prepareTracks(rawList) {
-    return window.SaintCatalogue.order(
-      (rawList || localTracks).map((track) => {
-        const local = localTracks.find(
-          (item) => item.slug === track.slug || (track.soundcloudId && item.soundcloudId === track.soundcloudId)
-        );
-        const hasCustomArtwork = Boolean(
-          local?.artwork &&
-            !local.artworkPlaceholder &&
-            local.artwork !== "assets/artwork/cover-placeholder.svg" &&
-            !/\/soundcloud-/.test(local.artwork),
-        );
-        const artistCredits = local?.artistCredits?.length
-          ? local.artistCredits
-          : track.artistCredits;
-        const localOverrides = {};
-        [
-          "summary",
-          "meaning",
-          "production",
-          "story",
-          "spotifyUrl",
-          "appleMusicUrl",
-        ].forEach((field) => {
-          if (local && Object.prototype.hasOwnProperty.call(local, field))
-            localOverrides[field] = local[field];
-        });
-        return {
-          ...track,
-          ...localOverrides,
-          ...(hasCustomArtwork
-            ? {
-                artwork: local.artwork,
-                artworkThumb: local.artworkThumb || local.artwork,
-                artworkAlt: local.artworkAlt || track.artworkAlt,
-                artworkPlaceholder: false,
-              }
-            : {}),
-          artist: artistCredits?.length
-            ? artistCredits.join(", ")
-            : "Artist credit needed",
-          artistCredits,
-          credits: local?.credits?.length ? local.credits : track.credits,
-        };
-      }),
-    );
+    const mapped = (rawList || localTracks).map((track) => {
+      const local = localTracks.find(
+        (item) => item.slug === track.slug || (track.soundcloudId && item.soundcloudId === track.soundcloudId)
+      );
+      const hasCustomArtwork = Boolean(
+        local?.artwork &&
+          !local.artworkPlaceholder &&
+          local.artwork !== "assets/artwork/cover-placeholder.svg" &&
+          !/\/soundcloud-/.test(local.artwork),
+      );
+      const artistCredits = local?.artistCredits?.length
+        ? local.artistCredits
+        : track.artistCredits;
+      const localOverrides = {};
+      [
+        "summary",
+        "meaning",
+        "production",
+        "story",
+        "spotifyUrl",
+        "appleMusicUrl",
+      ].forEach((field) => {
+        if (local && Object.prototype.hasOwnProperty.call(local, field))
+          localOverrides[field] = local[field];
+      });
+      return {
+        ...track,
+        ...localOverrides,
+        ...(hasCustomArtwork
+          ? {
+              artwork: local.artwork,
+              artworkThumb: local.artworkThumb || local.artwork,
+              artworkAlt: local.artworkAlt || track.artworkAlt,
+              artworkPlaceholder: false,
+            }
+          : {}),
+        artist: artistCredits?.length
+          ? artistCredits.join(", ")
+          : "Artist credit needed",
+        artistCredits,
+        credits: local?.credits?.length ? local.credits : track.credits,
+      };
+    });
+    return window.SaintCatalogue ? window.SaintCatalogue.order(mapped) : mapped;
   }
   const publishedTracks = window.SAINT_SYNCED_TRACKS;
   const canSyncPlaylist = !publishedTracks && config.playlistUrl && window.SaintPlaylist?.sync;
@@ -238,7 +237,7 @@
     return entries;
   };
   const card = (t, i) =>
-    `<a class="card" href="${link(t)}"><div class="card-art"><img loading="lazy" src="${e(thumb(t))}" alt="${e(isPlaceholderArt(t) ? "Placeholder print study for " + t.title : t.artworkAlt || "Cover artwork for " + t.title)}"></div><div class="micro"><span>FRAGMENT / ${String(tracks.indexOf(t) + 1).padStart(3, "0")}</span>${date(t) ? "<span>" + e(date(t)) + "</span>" : ""}</div><h3>${e(t.title)}</h3><p>${e(label(t))}</p></a>`;
+    `<a class="card" href="${link(t)}"><div class="card-art"><img loading="lazy" decoding="async" src="${e(thumb(t))}" alt="${e(isPlaceholderArt(t) ? "Placeholder print study for " + t.title : t.artworkAlt || "Cover artwork for " + t.title)}"></div><div class="micro"><span>FRAGMENT / ${String(tracks.indexOf(t) + 1).padStart(3, "0")}</span>${date(t) ? "<span>" + e(date(t)) + "</span>" : ""}</div><h3>${e(t.title)}</h3><p>${e(label(t))}</p></a>`;
   const menu = document.querySelector(".menu-toggle"),
     nav = document.querySelector("#navigation");
   menu.addEventListener("click", () => {
@@ -292,6 +291,7 @@
     n.innerHTML = links.join(" ");
   });
   function mountPlayer(node, t) {
+    if (!window.SaintPlayer?.mount) return;
     const number = tracks.indexOf(t) + 1;
     window.SaintPlayer.mount(node, t, {
       label: number > 0 ? "FRAGMENT / " + String(number).padStart(3, "0") : "AUDIO DECK",
@@ -339,7 +339,7 @@
           .filter((t) => !t.placeholder)
           .map(card)
           .join("") || "<p>More works will appear here.</p>";
-      window.SaintCarousel.mount(document.querySelector("#selected"));
+      window.SaintCarousel?.mount(document.querySelector("#selected"));
     }
     if (page === "collection") {
       const playlist = validUrl(config.playlistUrl, true),
@@ -498,7 +498,7 @@
               .filter((t) => !t.placeholder)
               .map(card)
               .join("") || "<p>More works will appear here.</p>";
-          window.SaintCarousel.mount(selected);
+          window.SaintCarousel?.mount(selected);
         }
         const featured = tracks.find((track) => !track.placeholder);
         const host = document.querySelector("#featured");
@@ -586,7 +586,7 @@
       <details class="artist-profile" ${artist.expanded ? "open" : ""}>
         <summary>${e(artist.name)}<span aria-hidden="true" class="artist-expand">+</span></summary>
         <div class="artist-profile-body">
-          ${artist.portrait ? `<img src="${e(art({ artwork: artist.portrait }))}" alt="Portrait of ${e(artist.name)}">` : '<div class="artist-portrait-placeholder"><span class="micro">PORTRAIT TO FOLLOW</span></div>'}
+          ${artist.portrait ? `<img loading="lazy" decoding="async" src="${e(art({ artwork: artist.portrait }))}" alt="Portrait of ${e(artist.name)}">` : '<div class="artist-portrait-placeholder"><span class="micro">PORTRAIT TO FOLLOW</span></div>'}
           <div><h4>Role</h4><p>${e(artist.role)}</p><h4>About</h4><p>${e(artist.bio)}</p><h4>Links</h4><div class="artist-links">${artistLinks(artist) || "<p><em>links coming soon</em></p>"}</div></div>
         </div>
       </details>`,

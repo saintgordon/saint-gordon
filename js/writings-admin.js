@@ -8,7 +8,7 @@
 
   const API_URL = "/api/writings";
   const DRAFT_STORAGE_KEY = "sg_writings_autosave_v1";
-  const TOKEN_STORAGE_KEY = "sg_writings_gh_token";
+  try { window.localStorage.removeItem("sg_writings_gh_token"); } catch (_) {}
 
   const state = {
     authenticated: false,
@@ -42,7 +42,6 @@
     panelPosts: $("panel-posts"),
     panelEditor: $("panel-editor"),
     panelMedia: $("panel-media"),
-    panelSetup: $("panel-setup"),
     postsList: $("admin-posts-list"),
     postsSearch: $("admin-posts-search"),
     btnRefreshPosts: $("btn-refresh-posts"),
@@ -76,10 +75,6 @@
     mediaOptCompress: $("media-opt-compress"),
     mediaOptXerox: $("media-opt-xerox"),
     mediaGrid: $("media-grid"),
-    setupStatusCopy: $("setup-status-copy"),
-    setupBrowserToken: $("setup-browser-token"),
-    btnSaveBrowserToken: $("btn-save-browser-token"),
-    btnClearBrowserToken: $("btn-clear-browser-token"),
     embedModal: $("embed-modal"),
     embedUrlInput: $("embed-url-input"),
     embedCaptionInput: $("embed-caption-input"),
@@ -100,31 +95,17 @@
     }, durationMs || 2800);
   }
 
-  function getBrowserToken() {
-    try {
-      return (window.localStorage.getItem(TOKEN_STORAGE_KEY) || "").trim();
-    } catch (_) {
-      return "";
-    }
-  }
-
   function hasWriteCapability() {
-    return state.cloudConfigured || Boolean(getBrowserToken());
+    return Boolean(state.cloudConfigured);
   }
 
   function authHeaders(extra) {
-    const h = Object.assign({ "Content-Type": "application/json" }, extra || {});
-    const bt = getBrowserToken();
-    if (bt && !state.cloudConfigured) {
-      h["X-GitHub-Token"] = bt;
-    }
-    return h;
+    return Object.assign({ "Content-Type": "application/json" }, extra || {});
   }
 
   async function apiGet(query) {
     const resp = await fetch(API_URL + "?" + query, {
       credentials: "same-origin",
-      headers: getBrowserToken() && !state.cloudConfigured ? { "X-GitHub-Token": getBrowserToken() } : {},
     });
     const data = await resp.json().catch(function () { return {}; });
     if (!resp.ok) {
@@ -175,28 +156,17 @@
     dom.panelPosts.classList.toggle("hidden", tabName !== "posts");
     dom.panelEditor.classList.toggle("hidden", tabName !== "editor");
     dom.panelMedia.classList.toggle("hidden", tabName !== "media");
-    dom.panelSetup.classList.toggle("hidden", tabName !== "setup");
   }
 
   function updateCloudStatusUI() {
-    const bt = getBrowserToken();
+    if (!dom.cloudStatusBtn) return;
     if (state.cloudConfigured) {
-      dom.cloudStatusBtn.textContent = "● CLOUD CONNECTED";
+      dom.cloudStatusBtn.textContent = "● READY";
       dom.cloudStatusBtn.classList.add("connected");
-      dom.setupStatusCopy.innerHTML =
-        "<strong>Connected via Vercel <code>GITHUB_TOKEN</code>.</strong> You can publish, edit, delete posts, and upload media from any device using only your admin password.";
-    } else if (bt) {
-      dom.cloudStatusBtn.textContent = "● BROWSER TOKEN ACTIVE";
-      dom.cloudStatusBtn.classList.add("connected");
-      dom.setupStatusCopy.innerHTML =
-        "<strong>Connected using your browser fallback token.</strong> Publishing works right now on this device. Add <code>GITHUB_TOKEN</code> in Vercel Environment Variables whenever you want password-only publishing across all devices.";
     } else {
-      dom.cloudStatusBtn.textContent = "○ CONNECT GITHUB TO PUBLISH";
+      dom.cloudStatusBtn.textContent = "○ OFFLINE";
       dom.cloudStatusBtn.classList.remove("connected");
-      dom.setupStatusCopy.innerHTML =
-        "Your admin password is verified, but <code>GITHUB_TOKEN</code> is not set in Vercel yet. Follow the 3 steps below (or paste a scoped fallback token) so clicking Publish commits straight to GitHub.";
     }
-    if (dom.setupBrowserToken) dom.setupBrowserToken.value = bt;
   }
 
   /* ========================================================================
@@ -213,7 +183,6 @@
   const gateCtrl = GATE.m({
     dom: dom,
     state: state,
-    getToken: getBrowserToken,
     onUnlock: enterDashboard,
     toast: showToast,
   });
@@ -338,8 +307,7 @@
 
   async function runWriteAction(fn, successMsg) {
     if (!hasWriteCapability()) {
-      switchTab("setup");
-      showToast("Connect GITHUB_TOKEN first to save changes", 3400);
+      showToast("Publishing storage is currently offline", 3400);
       return null;
     }
     try {
@@ -355,9 +323,6 @@
       if (successMsg) showToast(successMsg);
       return res;
     } catch (err) {
-      if (err.code === "NO_GITHUB_TOKEN") {
-        switchTab("setup");
-      }
       showToast(err.message || "Action failed", 3800);
       return null;
     }
@@ -632,7 +597,7 @@
         state.editingOriginalSlug = res.post.slug;
         state.slugManuallyEdited = true;
         try { window.localStorage.removeItem(DRAFT_STORAGE_KEY); } catch (_) {}
-        dom.edAutosaveStatus.textContent = status === "published" ? "PUBLISHED TO GITHUB" : "SAVED AS DRAFT";
+        dom.edAutosaveStatus.textContent = status === "published" ? "PUBLISHED LIVE" : "SAVED AS DRAFT";
       }
     } finally {
       dom.btnPublishPost.disabled = false;
@@ -762,8 +727,7 @@
 
   async function uploadSingleFile(file, opts) {
     if (!hasWriteCapability()) {
-      switchTab("setup");
-      showToast("Connect GITHUB_TOKEN first to upload media", 3400);
+      showToast("Publishing storage is currently offline", 3400);
       return null;
     }
     showToast("Uploading " + file.name + "…", 4000);
@@ -994,10 +958,9 @@
   document.querySelectorAll(".admin-tab").forEach(function (btn) {
     btn.addEventListener("click", function () { switchTab(btn.dataset.tab); });
   });
-  dom.cloudStatusBtn.addEventListener("click", function () { switchTab("setup"); });
   dom.btnNewPost.addEventListener("click", resetEditorForNewPost);
   dom.btnRefreshPosts.addEventListener("click", function () {
-    refreshAdminData().then(function () { showToast("Refreshed from GitHub"); });
+    refreshAdminData().then(function () { showToast("Refreshed posts"); });
   });
 
   document.querySelectorAll("button[data-post-filter]").forEach(function (btn) {
@@ -1013,25 +976,6 @@
   dom.postsSearch.addEventListener("input", function () {
     state.postSearch = dom.postsSearch.value.trim();
     renderPostsList();
-  });
-
-  dom.btnSaveBrowserToken.addEventListener("click", function () {
-    const val = dom.setupBrowserToken.value.trim();
-    if (!val) {
-      showToast("Paste a GitHub token first");
-      return;
-    }
-    try { window.localStorage.setItem(TOKEN_STORAGE_KEY, val); } catch (_) {}
-    updateCloudStatusUI();
-    refreshAdminData();
-    showToast("Saved scoped GitHub token in this browser");
-  });
-
-  dom.btnClearBrowserToken.addEventListener("click", function () {
-    try { window.localStorage.removeItem(TOKEN_STORAGE_KEY); } catch (_) {}
-    dom.setupBrowserToken.value = "";
-    updateCloudStatusUI();
-    showToast("Cleared browser token");
   });
 
   gateCtrl.c();

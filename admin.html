@@ -16,9 +16,9 @@
     />
     <link rel="stylesheet" href="css/style.css?v=20261125-writings" />
     <link rel="stylesheet" href="css/writings.css?v=20261125-writings" />
-    <script src="js/sg-gate.js?v=20261125-obf" defer></script>
-    <script src="js/writings-markdown.js?v=20261125-obf" defer></script>
-    <script src="js/writings-admin.js?v=20261125-rt" defer></script>
+    <script src="js/sg-gate.js?v=20261128-1" defer></script>
+    <script src="js/writings-markdown.js?v=20261128-1" defer></script>
+    <script src="js/writings-admin.js?v=20261128-1" defer></script>
   </head>
   <body data-page="admin">
     <a class="skip" href="#main">Skip to admin portal</a>
@@ -68,9 +68,9 @@
         <div class="admin-bar">
           <div class="admin-bar-left">
             <span class="admin-bar-title">Writings Desk</span>
-            <button type="button" id="btn-cloud-status" class="admin-cloud-pill micro" title="View cloud publishing setup">
-              Checking storage…
-            </button>
+            <span id="btn-cloud-status" class="admin-cloud-pill micro" role="status">
+              Checking…
+            </span>
           </div>
           <div class="admin-bar-actions">
             <button type="button" id="btn-new-post" class="admin-bar-btn admin-bar-btn-primary">
@@ -95,9 +95,6 @@
           </button>
           <button type="button" class="admin-tab" role="tab" aria-selected="false" data-tab="media">
             Media Library (<span id="tab-media-count">0</span>)
-          </button>
-          <button type="button" class="admin-tab" role="tab" aria-selected="false" data-tab="setup">
-            Cloud Setup
           </button>
         </div>
 
@@ -300,40 +297,6 @@
 
           <div id="media-grid" class="media-grid">
             <div class="writings-loading micro">LOADING MEDIA…</div>
-          </div>
-        </section>
-
-        <!-- ========== TAB 4: CLOUD SETUP ========== -->
-        <section id="panel-setup" class="admin-card hidden" aria-label="Cloud publishing setup">
-          <span class="micro">STORAGE &amp; PUBLISHING SETUP</span>
-          <h2 style="font-size:2.1rem;margin:10px 0 14px;">GitHub-Backed Cloud Publishing</h2>
-          <p id="setup-status-copy" style="max-width:66ch;line-height:1.7;color:#303030;"></p>
-
-          <div style="border:1px solid #101010;background:#f2f2f2;padding:20px 22px;margin:22px 0;">
-            <strong class="micro" style="display:block;margin-bottom:10px;">RECOMMENDED ONE-TIME SETUP (PASSWORD-ONLY PUBLISHING FROM ANY DEVICE)</strong>
-            <ol style="margin:0;padding-left:20px;line-height:1.75;font-size:14px;">
-              <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">GitHub Fine-Grained Tokens ↗</a> and create a token with access to <strong>Only select repositories → <code>saintgordon/saint-gordon</code></strong>.</li>
-              <li>Under <strong>Repository permissions</strong>, set <strong>Contents → Read and write</strong>, then click <strong>Generate token</strong>.</li>
-              <li>In <a href="https://vercel.com/saint-gordon/saintgordon/settings/environment-variables" target="_blank" rel="noopener noreferrer">Vercel → Settings → Environment Variables ↗</a>, add <code>GITHUB_TOKEN</code> with that token and trigger one redeploy.</li>
-            </ol>
-          </div>
-
-          <div style="border-top:1px dashed #b8b8b8;padding-top:20px;margin-top:24px;">
-            <strong class="micro" style="display:block;margin-bottom:8px;">OPTIONAL: BROWSER-ONLY FALLBACK TOKEN</strong>
-            <p style="font-size:14px;color:#555555;margin-bottom:12px;">
-              Want to publish right now before adding the Vercel env var? Paste a scoped GitHub token here — it stays strictly in this browser’s local storage and is sent only with your authenticated admin requests.
-            </p>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;max-width:620px;">
-              <input
-                type="password"
-                id="setup-browser-token"
-                style="flex:1;min-width:220px;border:1px solid #101010;padding:10px 12px;font-family:'Courier New',monospace;"
-                placeholder="github_pat_..."
-                autocomplete="off"
-              />
-              <button type="button" id="btn-save-browser-token" class="writings-btn writings-btn-sm">Save in Browser</button>
-              <button type="button" id="btn-clear-browser-token" class="writings-btn writings-btn-outline writings-btn-sm">Clear</button>
-            </div>
           </div>
         </section>
       </section>
