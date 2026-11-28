@@ -15,6 +15,10 @@ class UpdaterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             u.feed_tracks(b'<rss><channel><link>https://soundcloud.com/someone-else</link></channel></rss>')
         with self.assertRaises(ValueError):
+            u.feed_tracks(b'<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol">]><rss><channel></channel></rss>')
+        with self.assertRaises(ValueError):
+            u.fetch('http://soundcloud.com/ceannairefr')
+        with self.assertRaises(ValueError):
             u.profile_track_urls('<html>Access denied</html>')
 
     def test_artist_credits_use_explicit_metadata(self):

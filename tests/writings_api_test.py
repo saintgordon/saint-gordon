@@ -210,12 +210,72 @@ class WritingsApiTests(unittest.TestCase):
         self.assertIn("studio-dispatch", rss)
         self.assertNotIn("secret-draft", rss)
 
-    def test_geoblocker_blocks_cn_il_ru_ir_in_and_allows_others(self):
-        for code in ("CN", "IL", "RU", "IR", "IN", "cn", "ru"):
-            self.assertTrue(writings.is_country_blocked(code), f"Expected {code} to be blocked")
-            self.assertEqual(writings.get_request_country({"X-Vercel-IP-Country": code}), code.upper())
-        for allowed in ("AU", "US", "GB", "CA", "JP", "DE", ""):
+    def test_geoblocker_allows_only_au_and_trusted_loopback(self):
+        for blocked in ("CN", "IL", "RU", "IR", "IN", "US", "GB", "CA", "JP", "DE", "NZ", "SG", ""):
+            self.assertTrue(writings.is_country_blocked(blocked), f"Expected {blocked!r} to be blocked")
+        for allowed in ("AU", "au"):
             self.assertFalse(writings.is_country_blocked(allowed), f"Expected {allowed} to be allowed")
+            self.assertTrue(writings.is_admin_geo_allowed({"X-Vercel-IP-Country": allowed}, client_addr="203.0.113.5"))
+
+        # Non-AU country blocked even if loopback client_addr or spoofed XFF is passed
+        self.assertFalse(
+            writings.is_admin_geo_allowed(
+                {"X-Vercel-IP-Country": "US", "X-Forwarded-For": "127.0.0.1"},
+                client_addr="127.0.0.1",
+            )
+        )
+        # Trusted loopback (127.0.0.1 / ::1) allowed when server talks to itself locally
+        self.assertTrue(writings.is_admin_geo_allowed({}, client_addr="127.0.0.1"))
+        self.assertTrue(writings.is_admin_geo_allowed({}, client_addr="::1"))
+        self.assertFalse(writings.is_admin_geo_allowed({}, client_addr="198.51.100.25"))
+
+    def test_encrypted_drafts_at_rest_and_exif_gps_stripper(self):
+        with mock.patch.dict(os.environ, {"WRITINGS_SESSION_SECRET": "unit-test-draft-secret-2026"}):
+            secret_md = b"---\ntitle: \"Unreleased Track\"\n---\n\nTop secret studio lyrics."
+            aad = "writings/_drafts/unreleased-track.md"
+            enc = writings.encrypt_draft_bytes(secret_md, aad)
+            self.assertTrue(enc.startswith(b"SGDRAFT1:"))
+            self.assertNotIn(b"Unreleased Track", enc)
+            self.assertNotIn(b"Top secret", enc)
+            self.assertEqual(writings.decrypt_draft_bytes(enc, aad), secret_md)
+            # Wrong AAD (file-swap attack) or tampered byte must fail authentication
+            with self.assertRaises(ValueError):
+                writings.decrypt_draft_bytes(enc, "writings/_drafts/other-slug.md")
+            tampered = enc[:-4] + (b"AAAA" if not enc.endswith(b"AAAA\n") else b"BBBB") + b"\n"
+            with self.assertRaises(ValueError):
+                writings.decrypt_draft_bytes(tampered, aad)
+
+        # JPEG APP1 (EXIF/GPS) + COM stripping
+        app0 = b"\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+        exif_payload = b"Exif\x00\x00GPS:-34.9285,138.6007;Serial:ABC999"
+        app1 = b"\xff\xe1" + (len(exif_payload) + 2).to_bytes(2, "big") + exif_payload
+        com_payload = b"Author: Bryn MacBook Studio"
+        com_seg = b"\xff\xfe" + (len(com_payload) + 2).to_bytes(2, "big") + com_payload
+        sos_tail = b"\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xab\xcd\xff\xd9"
+        raw_jpg = b"\xff\xd8" + app0 + app1 + com_seg + sos_tail
+        clean_jpg = writings.strip_media_metadata(raw_jpg, ".jpg")
+        self.assertTrue(clean_jpg.startswith(b"\xff\xd8\xff\xe0"))
+        self.assertTrue(clean_jpg.endswith(sos_tail))
+        self.assertNotIn(b"138.6007", clean_jpg)
+        self.assertNotIn(b"Exif", clean_jpg)
+        self.assertNotIn(b"Bryn MacBook", clean_jpg)
+
+        # PNG eXIf + tEXt stripping
+        png_1x1 = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="
+        )
+        text_data = b"Author\x00Secret Studio Location -34.9285"
+        text_chunk = len(text_data).to_bytes(4, "big") + b"tEXt" + text_data + b"\x00\x00\x00\x00"
+        png_with_meta = png_1x1[:-12] + text_chunk + png_1x1[-12:]
+        clean_png = writings.strip_media_metadata(png_with_meta, ".png")
+        self.assertEqual(clean_png, png_1x1)
+        self.assertNotIn(b"Secret Studio", clean_png)
+
+        # MP4 QuickTime ©xyz ISO-6709 GPS redaction (preserves exact byte length!)
+        mp4_raw = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom\x00\x00\x00\x20\xa9xyz\x00\x14\x15\xc7-34.9285+138.6007/"
+        clean_mp4 = writings.strip_media_metadata(mp4_raw, ".mp4")
+        self.assertEqual(len(clean_mp4), len(mp4_raw))
+        self.assertNotIn(b"-34.9285+138.6007", clean_mp4)
 
     def test_ecdh_p256_envelope_auth_replay_and_tamper_protection(self):
         test_pwd = "saint-gordon-test-passphrase-2026"
@@ -327,9 +387,11 @@ class WritingsApiTests(unittest.TestCase):
                  mock.patch.object(writings, "_github_request", side_effect=store.request):
                 writings._IP_LOCKOUT_STATE.clear()
                 writings._USED_NONCES.clear()
+                writings._REVOKED_JTIS.clear()
+                writings.invalidate_live_caches()
 
-                # 1. Stealth 404 for geo-blocked countries (CN, IL, RU, IR, IN)
-                for country in ("CN", "IL", "RU", "IR", "IN"):
+                # 1. Stealth 404 for ALL non-AU countries (US, GB, CN, IL, RU, IR, IN); AU allowed
+                for country in ("US", "GB", "CN", "IL", "RU", "IR", "IN"):
                     st, _, raw = http_call("GET", "/api/writings?action=not_found", headers={"X-Vercel-IP-Country": country})
                     self.assertEqual(st, 404)
                     html = raw.decode("utf-8").lower()
@@ -350,9 +412,15 @@ class WritingsApiTests(unittest.TestCase):
                     st_pub, _, _ = http_call("GET", "/api/writings?action=list", headers={"X-Vercel-IP-Country": country})
                     self.assertEqual(st_pub, 200)
 
-                # 2. Plaintext login rejected with 400; cross-origin POST rejected with 403 (2E); unauth session scrubbed (3.1)
+                st_au, _, _ = http_call("GET", "/api/writings?action=session", headers={"X-Vercel-IP-Country": "AU"})
+                self.assertEqual(st_au, 200)
+
+                # 2. Plaintext login rejected (400); >4 KB pre-auth POST rejected (413); CSRF rejected (403); unauth session scrubbed
                 st_pt, _, _ = http_call("POST", "/api/writings", {"action": "login", "password": test_pwd})
                 self.assertEqual(st_pt, 400)
+
+                st_big_preauth, _, _ = http_call("POST", "/api/writings", {"action": "login", "pad": "x" * 5000})
+                self.assertEqual(st_big_preauth, 413)
 
                 st_csrf, _, _ = http_call(
                     "POST",
@@ -454,7 +522,7 @@ class WritingsApiTests(unittest.TestCase):
                 self.assertEqual(st_pub_post, 200)
                 self.assertIn(media_path, json.loads(raw_pub_post)["body"])
 
-                # 7. Toggle status to Draft -> isolated in writings/_drafts/, removed from public posts.json & posts/ (1B)
+                # 7. Toggle status to Draft -> isolated in writings/_drafts/ AND encrypted at rest (SGDRAFT1:)
                 st_tog, _, raw_tog = http_call("POST", "/api/writings", {
                     "action": "toggle_status",
                     "slug": "studio-mix-breakdown",
@@ -464,10 +532,25 @@ class WritingsApiTests(unittest.TestCase):
                 self.assertEqual(json.loads(store.files[writings.POSTS_INDEX_REL].decode("utf-8")), [])
                 self.assertNotIn("writings/posts/studio-mix-breakdown.md", store.files)
                 self.assertIn("writings/_drafts/studio-mix-breakdown.md", store.files)
-                self.assertEqual(len(json.loads(store.files[writings.DRAFTS_INDEX_REL].decode("utf-8"))), 1)
+                raw_draft_md = store.files["writings/_drafts/studio-mix-breakdown.md"]
+                raw_draft_idx = store.files[writings.DRAFTS_INDEX_REL]
+                self.assertTrue(raw_draft_md.startswith(b"SGDRAFT1:"))
+                self.assertTrue(raw_draft_idx.startswith(b"SGDRAFT1:"))
+                self.assertNotIn(b"Studio Mix Breakdown", raw_draft_idx)
+                self.assertNotIn(b"Signal Chain", raw_draft_md)
+                dec_idx = json.loads(writings.decrypt_draft_bytes(raw_draft_idx, writings.DRAFTS_INDEX_REL).decode("utf-8"))
+                self.assertEqual(len(dec_idx), 1)
 
                 st_pub_draft, _, _ = http_call("GET", "/api/writings?action=post&slug=studio-mix-breakdown")
                 self.assertEqual(st_pub_draft, 404)
+
+                # Session stolen with different User-Agent must be rejected (401)
+                st_wrong_ua, _, _ = http_call(
+                    "GET",
+                    "/api/writings?action=admin_list",
+                    headers={"Cookie": session_cookie, "User-Agent": "StolenCookieBot/1.0"},
+                )
+                self.assertEqual(st_wrong_ua, 401)
 
                 st_adm_list, _, raw_adm_list = http_call("GET", "/api/writings?action=admin_list", headers=auth_hdr)
                 self.assertEqual(st_adm_list, 200)
@@ -499,9 +582,33 @@ class WritingsApiTests(unittest.TestCase):
                 self.assertEqual(json.loads(raw_dp)["posts"], [])
                 self.assertNotIn("writings/posts/studio-mix-breakdown.md", store.files)
 
-                # 10. Logout clears session
+                # 10. Logout clears AND server-side revokes session token (replay fails with 401!)
                 st_out, _, _ = http_call("POST", "/api/writings", {"action": "logout"}, headers=auth_hdr)
                 self.assertEqual(st_out, 200)
+                st_after_out, _, _ = http_call("GET", "/api/writings?action=admin_list", headers=auth_hdr)
+                self.assertEqual(st_after_out, 401)
+
+                # 11. HTTPS login sets __Host- prefixed Secure session cookie
+                st_ch2, _, raw_ch2 = http_call(
+                    "GET",
+                    "/api/writings?action=challenge",
+                    headers={"X-Vercel-IP-Country": "AU", "X-Forwarded-Proto": "https"},
+                )
+                self.assertEqual(st_ch2, 200)
+                ch2 = json.loads(raw_ch2)
+                env2 = writings.seal_login_envelope_py(test_pwd, ch2["nonce"], ch2["exp"], ch2["pub"])
+                st_in2, hdrs_in2, _ = http_call(
+                    "POST",
+                    "/api/writings",
+                    {"action": "login", "nonce": ch2["nonce"], "exp": ch2["exp"], "sig": ch2["sig"], **env2},
+                    headers={"X-Vercel-IP-Country": "AU", "X-Forwarded-Proto": "https"},
+                )
+                self.assertEqual(st_in2, 200)
+                https_cookies = hdrs_in2.get("_set_cookies") or []
+                self.assertTrue(
+                    any(c.startswith("__Host-sg_writings_session=") and "; Secure" in c for c in https_cookies),
+                    f"Expected __Host- Secure session cookie, got {https_cookies}",
+                )
         finally:
             server.shutdown()
             server.server_close()

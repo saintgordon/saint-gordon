@@ -54,11 +54,18 @@ DEFAULT_GITHUB_BRANCH = "main"
 SITE_ORIGIN = "https://saintgordon.vercel.app"
 
 SESSION_COOKIE_NAME = "sg_writings_session"
+HTTPS_SESSION_COOKIE_NAME = "__Host-sg_writings_session"
 LOCKOUT_COOKIE_NAME = "sg_writings_bf"
-SESSION_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
+HTTPS_LOCKOUT_COOKIE_NAME = "__Host-sg_writings_bf"
+SESSION_TTL_SECONDS = 24 * 60 * 60  # 24 hours
 CHALLENGE_TTL_SECONDS = 60  # One-time login challenge expires in 60 seconds
+MAX_UNAUTH_JSON_BODY_BYTES = 4_096  # Strict pre-auth POST body cap (4 KB)
 MAX_JSON_BODY_BYTES = 4_500_000
 MAX_MEDIA_RAW_BYTES = 3_000_000  # ~4.0 MB base64 JSON — safely under Vercel's 4.5 MB limit
+MAX_GITHUB_READ_BYTES = 4_000_000
+DRAFT_AEAD_PREFIX = b"SGDRAFT1:"
+LIVE_INDEX_TTL_SECONDS = 15.0
+MISSING_MEDIA_TTL_SECONDS = 60.0
 
 _LATTICE_M = (
     (246, 38, 165, 152, 47, 78, 15, 176, 103, 208, 231, 225, 62, 116, 91, 139),
@@ -107,14 +114,14 @@ def _reconstruct_v() -> str:
     _V_CACHE["v"] = res
     return res
 
-# Admin Geo-Blocker: China (CN), Israel (IL), Russia (RU), Iran (IR), India (IN)
-BLOCKED_ADMIN_COUNTRIES = frozenset({"CN", "IL", "RU", "IR", "IN"})
+# Admin Geo-Lock: strictly allow Australia (AU) or trusted local loopback (127.0.0.1 / ::1) ONLY
+ALLOWED_ADMIN_COUNTRIES = frozenset({"AU"})
 
 # Exponential anti-bruteforce lockout schedule (seconds per consecutive failed attempt)
 LOCKOUT_SCHEDULE_SECONDS = (5, 15, 30, 120, 300, 900)
 LOCKOUT_STATE_EXPIRY_SECONDS = 1800
 
-# Actions restricted to admin (geo-blocked countries receive stealth HTTP 404)
+# Actions restricted to admin (non-AU countries receive stealth HTTP 404)
 ADMIN_ACTIONS = frozenset({
     "not_found",
     "geo_blocked",
@@ -132,9 +139,12 @@ ADMIN_ACTIONS = frozenset({
     "delete_media",
 })
 
-# Warm-instance anti-bruteforce & one-time nonce replay caches (paired with signed HttpOnly lockout cookie)
+# Warm-instance anti-bruteforce, nonce replay, token revocation & negative-lookup caches
 _IP_LOCKOUT_STATE: dict[str, dict] = {}
 _USED_NONCES: dict[str, int] = {}
+_REVOKED_JTIS: dict[str, int] = {}
+_LIVE_INDEX_CACHE: dict[str, tuple[float, list[dict], str | None]] = {}
+_MISSING_MEDIA_CACHE: dict[str, float] = {}
 
 ALLOWED_MEDIA_EXTS = {
     ".jpg": "image/jpeg",
@@ -213,15 +223,32 @@ def _b64url_decode(encoded: str) -> bytes:
     return base64.urlsafe_b64decode(encoded + pad)
 
 
-def create_session_token(now: int | None = None) -> str:
+def _ua_fingerprint(user_agent: str | None) -> str:
+    if not user_agent:
+        return ""
+    return hashlib.sha256(user_agent.strip().encode("utf-8")).hexdigest()[:16]
+
+
+def create_session_token(now: int | None = None, *, user_agent: str | None = None) -> str:
     ts = int(time.time()) if now is None else int(now)
-    payload = {"iat": ts, "exp": ts + SESSION_TTL_SECONDS, "v": 1}
+    payload = {
+        "iat": ts,
+        "exp": ts + SESSION_TTL_SECONDS,
+        "jti": secrets.token_hex(8),
+        "ua": _ua_fingerprint(user_agent),
+        "v": 2,
+    }
     body = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     sig = hmac.new(_session_secret(), body.encode("ascii"), hashlib.sha256).digest()
     return f"{body}.{_b64url_encode(sig)}"
 
 
-def verify_session_token(token: str | None, now: int | None = None) -> bool:
+def verify_session_token(
+    token: str | None,
+    now: int | None = None,
+    *,
+    user_agent: str | None = None,
+) -> bool:
     if not token or "." not in token:
         return False
     parts = token.split(".", 1)
@@ -236,14 +263,75 @@ def verify_session_token(token: str | None, now: int | None = None) -> bool:
     try:
         data = json.loads(_b64url_decode(body).decode("utf-8"))
         exp = int(data.get("exp", 0))
+        jti = str(data.get("jti") or "")
+        tok_ua = str(data.get("ua") or "")
     except Exception:
         return False
     ts = int(time.time()) if now is None else int(now)
-    return ts < exp
+    _prune_caches(ts)
+    if ts >= exp:
+        return False
+    if jti and jti in _REVOKED_JTIS:
+        return False
+    if tok_ua and not hmac.compare_digest(tok_ua, _ua_fingerprint(user_agent)):
+        return False
+    return True
+
+
+def revoke_session_token(token: str | None, now: int | None = None) -> None:
+    if not token or "." not in token:
+        return
+    try:
+        body, _ = token.split(".", 1)
+        data = json.loads(_b64url_decode(body).decode("utf-8"))
+        jti = str(data.get("jti") or "")
+        exp = int(data.get("exp", 0))
+        ts = int(time.time()) if now is None else int(now)
+        if jti and exp > ts:
+            _REVOKED_JTIS[jti] = exp
+    except Exception:
+        pass
+
+
+def _draft_aead_keys() -> tuple[bytes, bytes]:
+    master = hashlib.blake2b(
+        b"sg-draft-aead-master-v1",
+        key=_session_secret(),
+        digest_size=64,
+    ).digest()
+    return master[:32], master[32:]
+
+
+def encrypt_draft_bytes(plaintext: bytes, aad: str) -> bytes:
+    k_enc, k_mac = _draft_aead_keys()
+    nonce = secrets.token_bytes(24)
+    aad_b = aad.encode("utf-8")
+    ks = hashlib.shake_256(k_enc + b"\x00" + nonce + b"\x00" + aad_b).digest(len(plaintext))
+    ct = bytes(a ^ b for a, b in zip(plaintext, ks))
+    tag = hmac.new(k_mac, b"SGD1|" + aad_b + b"|" + nonce + ct, hashlib.sha256).digest()
+    return DRAFT_AEAD_PREFIX + _b64url_encode(nonce + tag + ct).encode("ascii") + b"\n"
+
+
+def decrypt_draft_bytes(blob: bytes, aad: str) -> bytes:
+    trimmed = blob.strip()
+    if not trimmed.startswith(DRAFT_AEAD_PREFIX):
+        return blob
+    encoded = trimmed[len(DRAFT_AEAD_PREFIX):].decode("ascii")
+    raw = _b64url_decode(encoded)
+    if len(raw) < 56:
+        raise ValueError("Corrupted encrypted draft payload.")
+    nonce, tag, ct = raw[:24], raw[24:56], raw[56:]
+    k_enc, k_mac = _draft_aead_keys()
+    aad_b = aad.encode("utf-8")
+    expected_tag = hmac.new(k_mac, b"SGD1|" + aad_b + b"|" + nonce + ct, hashlib.sha256).digest()
+    if not hmac.compare_digest(tag, expected_tag):
+        raise ValueError("Draft integrity verification failed.")
+    ks = hashlib.shake_256(k_enc + b"\x00" + nonce + b"\x00" + aad_b).digest(len(ct))
+    return bytes(a ^ b for a, b in zip(ct, ks))
 
 
 # ---------------------------------------------------------------------------
-# Geo-Blocker, Zero-Plaintext Challenge-Response & Exponential Anti-Bruteforce
+# AU + Loopback Geo-Lock, Challenge-Response & Exponential Anti-Bruteforce
 # ---------------------------------------------------------------------------
 
 def get_request_country(headers) -> str:
@@ -256,8 +344,40 @@ def get_request_country(headers) -> str:
     return ""
 
 
+def is_loopback_ip(ip_str: str | None) -> bool:
+    val = (ip_str or "").strip().lower()
+    if not val:
+        return False
+    if val in ("127.0.0.1", "::1", "[::1]", "localhost"):
+        return True
+    return val.startswith("127.") or val.startswith("::ffff:127.")
+
+
 def is_country_blocked(country_code: str) -> bool:
-    return (country_code or "").strip().upper() in BLOCKED_ADMIN_COUNTRIES
+    code = (country_code or "").strip().upper()
+    return code not in ALLOWED_ADMIN_COUNTRIES
+
+
+def is_admin_geo_allowed(headers, client_addr: str = "") -> bool:
+    country = get_request_country(headers)
+    if country:
+        return country in ALLOWED_ADMIN_COUNTRIES
+    is_vercel = os.environ.get("VERCEL") == "1" or bool(
+        headers and (headers.get("x-vercel-id") or headers.get("X-Vercel-Id"))
+    )
+    real_ip = ""
+    if headers:
+        real_ip = (
+            headers.get("x-real-ip")
+            or headers.get("X-Real-IP")
+            or headers.get("x-vercel-forwarded-for")
+            or headers.get("X-Vercel-Forwarded-For")
+            or ""
+        ).strip()
+        if real_ip:
+            real_ip = real_ip.split(",")[-1].strip()
+    candidate = real_ip if is_vercel else (real_ip or client_addr)
+    return is_loopback_ip(candidate)
 
 
 def get_client_ip_key(headers, fallback_addr: str = "") -> str:
@@ -288,12 +408,20 @@ def _prune_caches(now: int) -> None:
     expired_nonces = [n for n, exp in _USED_NONCES.items() if exp < now]
     for n in expired_nonces:
         _USED_NONCES.pop(n, None)
+    expired_jtis = [j for j, exp in _REVOKED_JTIS.items() if exp <= now]
+    for j in expired_jtis:
+        _REVOKED_JTIS.pop(j, None)
     stale_ips = [
         k for k, st in _IP_LOCKOUT_STATE.items()
         if now - int(st.get("last_fail", 0)) > LOCKOUT_STATE_EXPIRY_SECONDS and now >= int(st.get("locked_until", 0))
     ]
     for k in stale_ips:
         _IP_LOCKOUT_STATE.pop(k, None)
+
+
+def invalidate_live_caches() -> None:
+    _LIVE_INDEX_CACHE.clear()
+    _MISSING_MEDIA_CACHE.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -652,6 +780,111 @@ def validate_media_magic_bytes(raw_bytes: bytes, ext: str) -> None:
         raise ValueError(f"File binary signature does not match '{ext}'.")
 
 
+_ISO6709_GPS_RE = re.compile(rb"[+-]\d{2,3}\.\d+[+-]\d{2,3}\.\d+(?:[+-]\d+(?:\.\d+)?)?/?")
+
+
+def strip_media_metadata(raw_bytes: bytes, ext: str) -> bytes:
+    """Losslessly strip EXIF, GPS coordinates, XMP, IPTC, and text comment chunks."""
+    ext = ext.lower()
+    if ext in (".jpg", ".jpeg") and raw_bytes[:2] == b"\xff\xd8":
+        out = bytearray(b"\xff\xd8")
+        i = 2
+        n = len(raw_bytes)
+        while i < n:
+            if raw_bytes[i] != 0xFF:
+                return raw_bytes
+            while i < n and raw_bytes[i] == 0xFF:
+                i += 1
+            if i >= n:
+                break
+            marker = raw_bytes[i]
+            i += 1
+            if marker == 0xD9:  # EOI
+                out.extend(b"\xff\xd9")
+                break
+            if marker == 0xDA:  # SOS — compressed scan data runs to end of file
+                out.extend(b"\xff\xda")
+                out.extend(raw_bytes[i:])
+                return bytes(out)
+            if marker in (0x01, 0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8):
+                out.extend(bytes((0xFF, marker)))
+                continue
+            if i + 2 > n:
+                return raw_bytes
+            seg_len = int.from_bytes(raw_bytes[i:i + 2], "big")
+            if seg_len < 2 or i + seg_len > n:
+                return raw_bytes
+            payload = raw_bytes[i + 2:i + seg_len]
+            # Strip APP1 (EXIF/GPS/XMP), APP12, APP13 (IPTC/Photoshop), COM, and non-ICC APP2
+            drop = marker in (0xE1, 0xEC, 0xED, 0xFE) or (
+                marker == 0xE2 and not payload.startswith(b"ICC_PROFILE\x00")
+            )
+            if not drop:
+                out.extend(bytes((0xFF, marker)))
+                out.extend(raw_bytes[i:i + seg_len])
+            i += seg_len
+        return bytes(out)
+
+    if ext == ".png" and raw_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+        out = bytearray(raw_bytes[:8])
+        i = 8
+        n = len(raw_bytes)
+        drop_chunks = {b"eXIf", b"tEXt", b"zTXt", b"iTXt", b"tIME"}
+        while i + 8 <= n:
+            c_len = int.from_bytes(raw_bytes[i:i + 4], "big")
+            c_type = raw_bytes[i + 4:i + 8]
+            end = i + 12 + c_len
+            if end > n:
+                return raw_bytes
+            if c_type not in drop_chunks:
+                out.extend(raw_bytes[i:end])
+            i = end
+            if c_type == b"IEND":
+                break
+        return bytes(out)
+
+    if ext == ".webp" and len(raw_bytes) >= 12 and raw_bytes[:4] == b"RIFF" and raw_bytes[8:12] == b"WEBP":
+        chunks_out = bytearray()
+        i = 12
+        n = len(raw_bytes)
+        while i + 8 <= n:
+            fourcc = raw_bytes[i:i + 4]
+            c_size = int.from_bytes(raw_bytes[i + 4:i + 8], "little")
+            padded = c_size + (c_size & 1)
+            end = i + 8 + padded
+            if end > n:
+                return raw_bytes
+            if fourcc not in (b"EXIF", b"XMP "):
+                if fourcc == b"VP8X" and c_size >= 4:
+                    patched = bytearray(raw_bytes[i:end])
+                    patched[8] &= ~(0x08 | 0x04)  # Clear EXIF & XMP flags
+                    chunks_out.extend(patched)
+                else:
+                    chunks_out.extend(raw_bytes[i:end])
+            i = end
+        riff_size = len(chunks_out) + 4
+        return b"RIFF" + riff_size.to_bytes(4, "little") + b"WEBP" + bytes(chunks_out)
+
+    if ext in (".mp4", ".mov"):
+        # Redact QuickTime/MP4 ISO-6709 GPS atoms in-place so stco/co64 sample offsets stay exact
+        buf = bytearray(raw_bytes)
+        for marker in (b"\xa9xyz", b"location.ISO6709"):
+            start = 0
+            while True:
+                idx = buf.find(marker, start)
+                if idx == -1:
+                    break
+                window = bytes(buf[idx:min(len(buf), idx + 160)])
+                for m in _ISO6709_GPS_RE.finditer(window):
+                    s_off = idx + m.start()
+                    e_off = idx + m.end()
+                    buf[s_off:e_off] = b" " * (e_off - s_off)
+                start = idx + len(marker)
+        return bytes(buf)
+
+    return raw_bytes
+
+
 def sanitize_filename(raw: str) -> str:
     base = Path(raw or "upload.png").name.lower()
     stem = re.sub(r"[^a-z0-9-]+", "-", Path(base).stem).strip("-") or "media"
@@ -821,15 +1054,20 @@ def _github_request(method: str, api_path: str, token: str = "", payload: dict |
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=12) as resp:
-            raw = resp.read()
+            raw = resp.read(MAX_GITHUB_READ_BYTES + 1)
+            if len(raw) > MAX_GITHUB_READ_BYTES:
+                raise ValueError("Upstream GitHub response exceeded size limit.")
             return resp.status, json.loads(raw.decode("utf-8")) if raw else None
     except urllib.error.HTTPError as err:
-        raw = err.read()
         try:
-            parsed = json.loads(raw.decode("utf-8")) if raw else {"message": err.reason}
-        except Exception:
-            parsed = {"message": raw.decode("utf-8", errors="replace") or str(err.reason)}
-        return err.code, parsed
+            raw = err.read(65_536)
+            try:
+                parsed = json.loads(raw.decode("utf-8")) if raw else {"message": err.reason}
+            except Exception:
+                parsed = {"message": raw.decode("utf-8", errors="replace") or str(err.reason)}
+            return err.code, parsed
+        finally:
+            err.close()
 
 
 def github_get_file(rel_path: str, token: str = "") -> tuple[bytes | None, str | None]:
@@ -851,7 +1089,10 @@ def github_get_file(rel_path: str, token: str = "") -> tuple[bytes | None, str |
             raw_headers["Authorization"] = f"Bearer {token}"
         req = urllib.request.Request(raw_url, headers=raw_headers)
         with urllib.request.urlopen(req, timeout=15) as resp:
-            return resp.read(), sha
+            raw = resp.read(MAX_GITHUB_READ_BYTES + 1)
+            if len(raw) > MAX_GITHUB_READ_BYTES:
+                raise ValueError("Upstream GitHub raw file exceeded size limit.")
+            return raw, sha
     return None, None
 
 
@@ -947,15 +1188,21 @@ def github_list_media(token: str = "") -> list[dict]:
     return items
 
 
-def read_posts_index(token: str = "", prefer_live: bool = True) -> tuple[list[dict], str | None]:
+def read_posts_index(token: str = "", prefer_live: bool = True, *, use_cache: bool = False) -> tuple[list[dict], str | None]:
+    now_f = time.monotonic()
     if prefer_live and token:
+        if use_cache:
+            cached = _LIVE_INDEX_CACHE.get("pub")
+            if cached is not None and (now_f - cached[0]) < LIVE_INDEX_TTL_SECONDS:
+                return list(cached[1]), cached[2]
         try:
             raw, sha = github_get_file(POSTS_INDEX_REL, token=token)
             if raw is not None:
                 parsed = json.loads(raw.decode("utf-8"))
                 if isinstance(parsed, list):
-                    pubs = [p for p in parsed if p.get("status", "published") == "published"]
-                    return sort_posts_newest(pubs), sha
+                    pubs = sort_posts_newest([p for p in parsed if p.get("status", "published") == "published"])
+                    _LIVE_INDEX_CACHE["pub"] = (now_f, pubs, sha)
+                    return pubs, sha
         except Exception:
             pass
 
@@ -976,7 +1223,8 @@ def read_drafts_index(token: str = "", prefer_live: bool = True) -> tuple[list[d
         try:
             raw, sha = github_get_file(DRAFTS_INDEX_REL, token=token)
             if raw is not None:
-                parsed = json.loads(raw.decode("utf-8"))
+                decrypted = decrypt_draft_bytes(raw, DRAFTS_INDEX_REL)
+                parsed = json.loads(decrypted.decode("utf-8"))
                 if isinstance(parsed, list):
                     return sort_posts_newest(parsed), sha
         except Exception:
@@ -985,7 +1233,8 @@ def read_drafts_index(token: str = "", prefer_live: bool = True) -> tuple[list[d
     local_path = ROOT_DIR / DRAFTS_INDEX_REL
     if local_path.is_file():
         try:
-            parsed = json.loads(local_path.read_text(encoding="utf-8"))
+            decrypted = decrypt_draft_bytes(local_path.read_bytes(), DRAFTS_INDEX_REL)
+            parsed = json.loads(decrypted.decode("utf-8"))
             if isinstance(parsed, list):
                 return sort_posts_newest(parsed), None
         except Exception:
@@ -1020,16 +1269,20 @@ def read_post_markdown(
     candidate_dirs = [DRAFTS_DIR_REL, POSTS_DIR_REL] if include_drafts else [POSTS_DIR_REL]
     for base_dir in candidate_dirs:
         rel_path = f"{base_dir}/{slug}.md"
+        is_draft_dir = base_dir == DRAFTS_DIR_REL
         if prefer_live and token:
             try:
                 raw, _ = github_get_file(rel_path, token=token)
                 if raw is not None:
-                    return parse_post_markdown(raw.decode("utf-8"))
+                    plain = decrypt_draft_bytes(raw, rel_path) if is_draft_dir else raw
+                    return parse_post_markdown(plain.decode("utf-8"))
             except Exception:
                 pass
         local_path = ROOT_DIR / rel_path
         if local_path.is_file():
-            return parse_post_markdown(local_path.read_text(encoding="utf-8"))
+            raw_local = local_path.read_bytes()
+            plain_local = decrypt_draft_bytes(raw_local, rel_path) if is_draft_dir else raw_local
+            return parse_post_markdown(plain_local.decode("utf-8"))
     return None, None
 
 
@@ -1041,14 +1294,24 @@ def read_media_bytes(filename: str, token: str = "") -> tuple[bytes | None, str]
         return None, ""
     mime = ALLOWED_MEDIA_EXTS[ext]
 
-    # Prefer local static file if already deployed, otherwise live from GitHub!
+    # Prefer local static file if already deployed, otherwise live from GitHub with negative-cache shield
     local_path = ROOT_DIR / MEDIA_DIR_REL / filename
     if local_path.is_file():
         return local_path.read_bytes(), mime
+    if not token:
+        return None, mime
+    now_f = time.monotonic()
+    miss_at = _MISSING_MEDIA_CACHE.get(filename)
+    if miss_at is not None and (now_f - miss_at) < MISSING_MEDIA_TTL_SECONDS:
+        return None, mime
     try:
         raw, _ = github_get_file(f"{MEDIA_DIR_REL}/{filename}", token=token)
         if raw is not None:
+            _MISSING_MEDIA_CACHE.pop(filename, None)
             return raw, mime
+        if len(_MISSING_MEDIA_CACHE) > 512:
+            _MISSING_MEDIA_CACHE.clear()
+        _MISSING_MEDIA_CACHE[filename] = now_f
     except Exception:
         pass
     return None, mime
@@ -1074,21 +1337,35 @@ class handler(BaseHTTPRequestHandler):
         morsel = jar.get(name)
         return morsel.value if morsel else None
 
+    def _session_cookie_name(self) -> str:
+        return HTTPS_SESSION_COOKIE_NAME if self._is_https() else SESSION_COOKIE_NAME
+
+    def _lockout_cookie_name(self) -> str:
+        return HTTPS_LOCKOUT_COOKIE_NAME if self._is_https() else LOCKOUT_COOKIE_NAME
+
     def _get_session_cookie(self) -> str | None:
-        return self._get_cookie(SESSION_COOKIE_NAME)
+        if self._is_https():
+            return self._get_cookie(HTTPS_SESSION_COOKIE_NAME)
+        return self._get_cookie(HTTPS_SESSION_COOKIE_NAME) or self._get_cookie(SESSION_COOKIE_NAME)
 
     def _get_lockout_cookie(self) -> str | None:
-        return self._get_cookie(LOCKOUT_COOKIE_NAME)
+        if self._is_https():
+            return self._get_cookie(HTTPS_LOCKOUT_COOKIE_NAME)
+        return self._get_cookie(HTTPS_LOCKOUT_COOKIE_NAME) or self._get_cookie(LOCKOUT_COOKIE_NAME)
 
     def _client_ip_key(self) -> str:
         fallback = self.client_address[0] if getattr(self, "client_address", None) else ""
         return get_client_ip_key(self.headers, fallback_addr=fallback)
 
     def _is_geo_blocked(self) -> bool:
-        return is_country_blocked(get_request_country(self.headers))
+        fallback = self.client_address[0] if getattr(self, "client_address", None) else ""
+        return not is_admin_geo_allowed(self.headers, client_addr=fallback)
 
     def _is_authenticated(self) -> bool:
-        return verify_session_token(self._get_session_cookie())
+        return verify_session_token(
+            self._get_session_cookie(),
+            user_agent=self.headers.get("User-Agent"),
+        )
 
     def _effective_github_token(self) -> str:
         return get_server_github_token()
@@ -1166,15 +1443,23 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html)
 
-    def _read_json_body(self) -> dict:
-        length = int(self.headers.get("Content-Length") or "0")
-        if length <= 0 or length > MAX_JSON_BODY_BYTES:
-            raise ValueError("Request body empty or exceeds 5 MB limit.")
+    def _read_json_body(self, *, max_bytes: int = MAX_JSON_BODY_BYTES) -> tuple[int, dict]:
+        try:
+            length = int(self.headers.get("Content-Length") or "0")
+        except ValueError:
+            return 400, {"error": "Invalid Content-Length."}
+        if length <= 0:
+            return 400, {"error": "Request body is empty."}
+        if length > max_bytes:
+            return 413, {"error": "Request payload exceeds size limit."}
         raw = self.rfile.read(length)
-        parsed = json.loads(raw.decode("utf-8"))
+        try:
+            parsed = json.loads(raw.decode("utf-8"))
+        except Exception:
+            return 400, {"error": "Invalid JSON payload."}
         if not isinstance(parsed, dict):
-            raise ValueError("JSON body must be an object.")
-        return parsed
+            return 400, {"error": "JSON body must be an object."}
+        return 200, parsed
 
     def do_HEAD(self):
         self.send_response(200)
@@ -1234,7 +1519,11 @@ class handler(BaseHTTPRequestHandler):
             filename = (params.get("file", [""])[0] or "").strip()
             raw, mime = read_media_bytes(filename, token=token)
             if raw is None:
-                self._send_json(404, {"error": "Media file not found."})
+                self._send_json(
+                    404,
+                    {"error": "Media file not found."},
+                    cache="no-store" if is_admin else "public, max-age=30, s-maxage=60",
+                )
                 return
             self.send_response(200)
             self.send_header("Content-Type", mime or mimetypes.guess_type(filename)[0] or "application/octet-stream")
@@ -1272,15 +1561,35 @@ class handler(BaseHTTPRequestHandler):
             if not slug:
                 self._send_json(400, {"error": "Missing or invalid post slug."})
                 return
-            all_posts = read_all_admin_posts(token=token, prefer_live=True) if is_admin else read_posts_index(token=token, prefer_live=True)[0]
+            all_posts = (
+                read_all_admin_posts(token=token, prefer_live=True)
+                if is_admin
+                else read_posts_index(token=token, prefer_live=True, use_cache=True)[0]
+            )
             entry = next((p for p in all_posts if p.get("slug") == slug), None)
+            # Negative-lookup shield: skip second GitHub API call when public slug is not in published index
+            if not is_admin and entry is None and token:
+                self._send_json(
+                    404,
+                    {"error": "Post not found."},
+                    cache="public, max-age=30, s-maxage=60",
+                )
+                return
             meta, body = read_post_markdown(slug, token=token, prefer_live=True, include_drafts=is_admin)
             if meta is None or body is None:
-                self._send_json(404, {"error": "Post not found."})
+                self._send_json(
+                    404,
+                    {"error": "Post not found."},
+                    cache="no-store" if is_admin else "public, max-age=30, s-maxage=60",
+                )
                 return
             merged = {**(entry or {}), **meta, "slug": slug}
             if merged.get("status", "published") != "published" and not is_admin:
-                self._send_json(404, {"error": "Post not found."})
+                self._send_json(
+                    404,
+                    {"error": "Post not found."},
+                    cache="public, max-age=30, s-maxage=60",
+                )
                 return
             self._send_json(
                 200,
@@ -1290,7 +1599,7 @@ class handler(BaseHTTPRequestHandler):
             return
 
         # Default public list: published posts sorted newest first
-        posts, _ = read_posts_index(token=token, prefer_live=True)
+        posts, _ = read_posts_index(token=token, prefer_live=True, use_cache=not is_admin)
         published = [p for p in posts if p.get("status", "published") == "published"]
         self._send_json(
             200,
@@ -1299,7 +1608,7 @@ class handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self):
-        # All POST actions are admin actions — stealth 404 for geo-blocked regions
+        # All POST actions are admin actions — stealth 404 for non-AU / non-loopback IPs
         if self._is_geo_blocked():
             self._send_json(404, {"error": "Not found."})
             return
@@ -1313,14 +1622,17 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(415, {"error": "Invalid request."})
             return
 
-        try:
-            body = self._read_json_body()
-        except Exception as err:
-            self._send_json(400, {"error": str(err)})
+        is_admin = self._is_authenticated()
+        max_body = MAX_JSON_BODY_BYTES if is_admin else MAX_UNAUTH_JSON_BODY_BYTES
+        parse_status, body = self._read_json_body(max_bytes=max_body)
+        if parse_status != 200:
+            self._send_json(parse_status, body)
             return
 
         action = str(body.get("action") or "").strip().lower()
         secure_attr = "; Secure" if self._is_https() else ""
+        sess_cookie_name = self._session_cookie_name()
+        bf_cookie_name = self._lockout_cookie_name()
 
         if action == "login":
             ip_key = self._client_ip_key()
@@ -1354,9 +1666,8 @@ class handler(BaseHTTPRequestHandler):
             )
             if not ok:
                 new_fails, _, timeout_sec, bf_val = record_failed_login(ip_key, lockout_ck)
-                time.sleep(0.5)
                 bf_cookie = (
-                    f"{LOCKOUT_COOKIE_NAME}={bf_val}; HttpOnly; Path=/; "
+                    f"{bf_cookie_name}={bf_val}; HttpOnly; Path=/; "
                     f"SameSite=Strict; Max-Age={LOCKOUT_STATE_EXPIRY_SECONDS}{secure_attr}"
                 )
                 self._send_json(
@@ -1373,13 +1684,13 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             clear_failed_logins(ip_key)
-            token_val = create_session_token()
+            token_val = create_session_token(user_agent=self.headers.get("User-Agent"))
             session_cookie = (
-                f"{SESSION_COOKIE_NAME}={token_val}; HttpOnly; Path=/; "
+                f"{sess_cookie_name}={token_val}; HttpOnly; Path=/; "
                 f"SameSite=Strict; Max-Age={SESSION_TTL_SECONDS}{secure_attr}"
             )
             clear_bf_cookie = (
-                f"{LOCKOUT_COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0{secure_attr}"
+                f"{bf_cookie_name}=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0{secure_attr}"
             )
             self._send_json(
                 200,
@@ -1393,12 +1704,19 @@ class handler(BaseHTTPRequestHandler):
             return
 
         if action == "logout":
-            cookie_hdr = f"{SESSION_COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0{secure_attr}"
-            self._send_json(200, {"ok": True, "authenticated": False}, set_cookies=[cookie_hdr])
+            revoke_session_token(self._get_session_cookie())
+            clear_cookies = [
+                f"{sess_cookie_name}=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0{secure_attr}"
+            ]
+            if sess_cookie_name != SESSION_COOKIE_NAME:
+                clear_cookies.append(
+                    f"{SESSION_COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Strict; Max-Age=0{secure_attr}"
+                )
+            self._send_json(200, {"ok": True, "authenticated": False}, set_cookies=clear_cookies)
             return
 
         # Every write action below strictly requires a valid verified session cookie
-        if not self._is_authenticated():
+        if not is_admin:
             self._send_json(401, {"error": "Admin session expired or missing. Please log in again."})
             return
 
@@ -1521,9 +1839,13 @@ class handler(BaseHTTPRequestHandler):
             )
             # Remove from drafts index & _drafts folder if previously saved as a draft
             if len(next_drafts) != len(draft_posts):
+                enc_draft_idx = encrypt_draft_bytes(
+                    (json.dumps(sort_posts_newest(next_drafts), indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                    DRAFTS_INDEX_REL,
+                )
                 github_put_file(
                     DRAFTS_INDEX_REL,
-                    (json.dumps(sort_posts_newest(next_drafts), indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                    enc_draft_idx,
                     f"writings: promote draft '{slug}'",
                     token=gh_token,
                     sha=draft_sha,
@@ -1552,17 +1874,22 @@ class handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
         else:
-            # Store strictly in isolated _drafts index & folder — zero draft entries in public posts.json!
+            # Store strictly in isolated _drafts index & folder encrypted at rest (AEAD)!
+            draft_md_rel = f"{DRAFTS_DIR_REL}/{slug}.md"
             github_put_file(
-                f"{DRAFTS_DIR_REL}/{slug}.md",
-                md_content,
+                draft_md_rel,
+                encrypt_draft_bytes(md_content, draft_md_rel),
                 f"writings: save draft ({slug})",
                 token=gh_token,
             )
             next_drafts = sort_posts_newest(next_drafts + [post_meta])
+            enc_draft_idx = encrypt_draft_bytes(
+                (json.dumps(next_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                DRAFTS_INDEX_REL,
+            )
             github_put_file(
                 DRAFTS_INDEX_REL,
-                (json.dumps(next_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                enc_draft_idx,
                 f"writings: update drafts index for '{slug}'",
                 token=gh_token,
                 sha=draft_sha,
@@ -1591,6 +1918,7 @@ class handler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
 
+        invalidate_live_caches()
         combined = sort_posts_newest(next_pubs + next_drafts)
         return {"ok": True, "post": post_meta, "posts": combined}
 
@@ -1628,14 +1956,19 @@ class handler(BaseHTTPRequestHandler):
                 pass
 
         if len(rem_drafts) != len(draft_posts):
+            enc_rem_drafts = encrypt_draft_bytes(
+                (json.dumps(rem_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                DRAFTS_INDEX_REL,
+            )
             github_put_file(
                 DRAFTS_INDEX_REL,
-                (json.dumps(rem_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                enc_rem_drafts,
                 f"writings: remove draft '{slug}'",
                 token=gh_token,
                 sha=draft_sha,
             )
 
+        invalidate_live_caches()
         return {"ok": True, "posts": sort_posts_newest(rem_pubs + rem_drafts)}
 
     def _handle_quick_toggle(self, action: str, body: dict, gh_token: str) -> dict:
@@ -1676,9 +2009,13 @@ class handler(BaseHTTPRequestHandler):
                 sha=pub_sha,
             )
             if len(next_drafts) != len(draft_posts):
+                enc_next_drafts = encrypt_draft_bytes(
+                    (json.dumps(next_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                    DRAFTS_INDEX_REL,
+                )
                 github_put_file(
                     DRAFTS_INDEX_REL,
-                    (json.dumps(next_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                    enc_next_drafts,
                     f"writings: remove published draft '{slug}'",
                     token=gh_token,
                     sha=draft_sha,
@@ -1694,10 +2031,20 @@ class handler(BaseHTTPRequestHandler):
         else:
             next_pubs = sort_posts_newest(next_pubs)
             next_drafts = sort_posts_newest(next_drafts + [updated])
-            github_put_file(f"{DRAFTS_DIR_REL}/{slug}.md", md_bytes, f"writings: {action} '{slug}'", token=gh_token)
+            draft_md_rel = f"{DRAFTS_DIR_REL}/{slug}.md"
+            github_put_file(
+                draft_md_rel,
+                encrypt_draft_bytes(md_bytes, draft_md_rel),
+                f"writings: {action} '{slug}'",
+                token=gh_token,
+            )
+            enc_next_drafts = encrypt_draft_bytes(
+                (json.dumps(next_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                DRAFTS_INDEX_REL,
+            )
             github_put_file(
                 DRAFTS_INDEX_REL,
-                (json.dumps(next_drafts, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                enc_next_drafts,
                 f"writings: update drafts ({action} '{slug}')",
                 token=gh_token,
                 sha=draft_sha,
@@ -1719,6 +2066,7 @@ class handler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
 
+        invalidate_live_caches()
         return {"ok": True, "post": updated, "posts": sort_posts_newest(next_pubs + next_drafts)}
 
     def _handle_upload_media(self, body: dict, gh_token: str) -> dict:
@@ -1738,6 +2086,7 @@ class handler(BaseHTTPRequestHandler):
         safe_name = sanitize_filename(raw_name)
         ext = Path(safe_name).suffix.lower()
         validate_media_magic_bytes(raw_bytes, ext)
+        raw_bytes = strip_media_metadata(raw_bytes, ext)
         rel_path = f"{MEDIA_DIR_REL}/{safe_name}"
         github_put_file(
             rel_path,
@@ -1745,6 +2094,7 @@ class handler(BaseHTTPRequestHandler):
             f"writings: upload media '{safe_name}'",
             token=gh_token,
         )
+        invalidate_live_caches()
         mime = ALLOWED_MEDIA_EXTS[ext]
         kind = "video" if mime.startswith("video/") else "audio" if mime.startswith("audio/") else "image"
         caption = Path(raw_name).stem.replace("-", " ").replace("_", " ").strip() or "Media"
@@ -1773,4 +2123,5 @@ class handler(BaseHTTPRequestHandler):
             f"writings: delete media '{filename}'",
             token=gh_token,
         )
+        invalidate_live_caches()
         return {"ok": True, "media": github_list_media(token=gh_token)}

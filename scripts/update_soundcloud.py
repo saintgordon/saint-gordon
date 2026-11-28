@@ -23,12 +23,27 @@ ITUNES = '{http://www.itunes.com/dtds/podcast-1.0.dtd}'
 PLACEHOLDER = 'assets/artwork/cover-placeholder.svg'
 
 
-def fetch(url):
+MAX_UPSTREAM_BYTES = 5_000_000
+UNSAFE_XML_RE = re.compile(rb'<!\s*(?:DOCTYPE|ENTITY)\b', re.I)
+
+
+def fetch(url, max_bytes=MAX_UPSTREAM_BYTES):
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != 'https' or not parsed.hostname:
+        raise ValueError('Refusing non-HTTPS upstream URL: ' + str(url))
     request = urllib.request.Request(url, headers={'User-Agent': 'SaintGordonSiteUpdater/1.0', 'Accept': '*/*'})
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(request, timeout=35) as response:
-                return response.read()
+            with urllib.request.urlopen(request, timeout=25) as response:
+                final_scheme = urllib.parse.urlparse(response.geturl()).scheme
+                if final_scheme != 'https':
+                    raise ValueError('Refusing non-HTTPS redirect from ' + str(url))
+                data = response.read(max_bytes + 1)
+                if len(data) > max_bytes:
+                    raise ValueError('Upstream response exceeded maximum size limit.')
+                return data
+        except ValueError:
+            raise
         except Exception:
             if attempt == 2:
                 raise
@@ -47,7 +62,10 @@ def profile_track_url(url):
 
 
 def feed_tracks(xml):
-    channel = ElementTree.fromstring(xml).find('channel')
+    raw_xml = xml.encode('utf-8') if isinstance(xml, str) else bytes(xml)
+    if UNSAFE_XML_RE.search(raw_xml):
+        raise ValueError('Unsafe XML entity or DOCTYPE declaration rejected.')
+    channel = ElementTree.fromstring(raw_xml).find('channel')
     if channel is None or (channel.findtext('link') or '').rstrip('/') != PROFILE:
         raise ValueError('SoundCloud did not return the Saint Gordon feed.')
     tracks = []

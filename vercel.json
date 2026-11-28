@@ -1,24 +1,36 @@
 {
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/archive(\\.html)?",
+      "destination": "/collection",
+      "permanent": true
+    },
+    {
+      "source": "/manifesto(\\.html)?",
+      "destination": "/about",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/admin",
-      "has": [
+      "missing": [
         {
           "type": "header",
           "key": "x-vercel-ip-country",
-          "value": "^(CN|IL|RU|IR|IN)$"
+          "value": "^AU$"
         }
       ],
       "destination": "/api/writings?action=not_found"
     },
     {
       "source": "/admin.html",
-      "has": [
+      "missing": [
         {
           "type": "header",
           "key": "x-vercel-ip-country",
-          "value": "^(CN|IL|RU|IR|IN)$"
+          "value": "^AU$"
         }
       ],
       "destination": "/api/writings?action=not_found"
@@ -40,6 +52,9 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Resource-Policy", "value": "same-origin" },
+        { "key": "X-Permitted-Cross-Domain-Policies", "value": "none" },
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
         {
           "key": "Content-Security-Policy",
@@ -53,6 +68,9 @@
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Resource-Policy", "value": "same-origin" },
+        { "key": "X-Permitted-Cross-Domain-Policies", "value": "none" },
         { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
         { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
@@ -67,7 +85,16 @@
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "Cross-Origin-Resource-Policy", "value": "same-origin" },
+        { "key": "X-Permitted-Cross-Domain-Policies", "value": "none" },
         { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    },
+    {
+      "source": "/assets/og-(.*)\\.png",
+      "headers": [
+        { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" },
+        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
       ]
     },
     {

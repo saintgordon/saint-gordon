@@ -22,7 +22,7 @@
     }
     try {
       const u = new URL(val);
-      if (u.protocol === "https:" || u.protocol === "http:") {
+      if (u.protocol === "https:") {
         return u.href;
       }
     } catch (_) {
